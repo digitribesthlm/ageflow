@@ -13,14 +13,23 @@ export default async function handler(req, res) {
 
     switch (req.method) {
       case 'GET':
-        const { project_id } = req.query
+        const { project_id, contract_id: queryContractId, process_instance_id, step_id } = req.query
         
-        // Build query based on whether project_id is provided
+        // Build query based on filters
         const query = {
           active: { $ne: false }
         }
         if (project_id) {
           query.project_id = project_id
+        }
+        if (queryContractId) {
+          query.contract_id = queryContractId
+        }
+        if (process_instance_id) {
+          query.process_instance_id = process_instance_id
+        }
+        if (step_id) {
+          query.step_id = step_id
         }
 
         const tasks = await db.collection('agency_tasks')
@@ -32,30 +41,53 @@ export default async function handler(req, res) {
 
       case 'POST':
         const {
-          title,
-          description,
-          project_id: taskProjectId,
-          assigned_to,
+          name,
           status,
-          priority,
-          due_date,
-          estimated_hours
+          assigned_to,
+          deadline,
+          contract_id,
+          project_id: taskProjectId,
+          service_id,
+          process_id: taskProcessId,
+          step_id: taskStepId,
+          description
         } = req.body
 
-        if (!title || !taskProjectId) {
-          return res.status(400).json({ message: 'Title and project ID are required' })
+        if (!name || !assigned_to || !service_id || !taskProcessId || !taskStepId) {
+          return res.status(400).json({ 
+            message: 'Name, assigned employee, service, process, and step are required' 
+          })
+        }
+
+        // Verify process exists and contains the step
+        const process = await db.collection('agency_process_templates')
+          .findOne({
+            template_id: taskProcessId,
+            active: true
+          })
+
+        if (!process) {
+          return res.status(400).json({ message: 'Invalid process' })
+        }
+
+        // Verify step exists in the process
+        const step = process.steps.find(s => s.step_id === taskStepId)
+        if (!step) {
+          return res.status(400).json({ message: 'Invalid step for the selected process' })
         }
 
         const newTask = {
           task_id: uuidv4(),
-          title,
-          description,
-          project_id: taskProjectId,
-          assigned_to,
+          name,
           status: status || 'pending',
-          priority: priority || 'medium',
-          due_date: new Date(due_date),
-          estimated_hours: parseFloat(estimated_hours) || 0,
+          assigned_to,
+          deadline: new Date(deadline),
+          contract_id: contract_id || null,
+          project_id: taskProjectId || null,
+          service_id,
+          process_id: taskProcessId,
+          step_id: taskStepId,
+          description,
           active: true,
           created_at: new Date(),
           updated_at: new Date()
@@ -72,4 +104,4 @@ export default async function handler(req, res) {
     console.error('Tasks API error:', error)
     res.status(500).json({ message: 'Internal server error' })
   }
-} 
+}

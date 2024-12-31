@@ -13,10 +13,9 @@ export default async function handler(req, res) {
     switch (req.method) {
       case 'GET':
         const templates = await db.collection('agency_process_templates')
-          .find({ active: true })
-          .sort({ name: 1 })
+          .find({ active: { $ne: false } })
           .toArray()
-
+        
         return res.status(200).json(templates || [])
 
       default:
