@@ -19,7 +19,18 @@ export default async function handler(req, res) {
         return res.status(200).json(projects)
 
       case 'POST':
-        const { name, client_id, service_id, project_type, start_date, end_date, total_budget } = req.body
+        const { 
+          name, 
+          client_id, 
+          service_id, 
+          project_type, 
+          start_date, 
+          end_date, 
+          total_budget,
+          phases,
+          template_id 
+        } = req.body
+        
         const newProject = {
           project_id: `PRJ${Date.now()}`,
           name,
@@ -30,7 +41,12 @@ export default async function handler(req, res) {
           start_date: new Date(start_date),
           end_date: new Date(end_date),
           total_budget: parseFloat(total_budget),
-          phases: [],
+          phases: phases.map(phase => ({
+            ...phase,
+            start_date: new Date(phase.start_date),
+            end_date: new Date(phase.end_date)
+          })),
+          template_id,
           active: true,
           created_at: new Date()
         }

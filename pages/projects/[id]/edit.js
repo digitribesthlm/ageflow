@@ -12,6 +12,8 @@ export default function EditProject() {
   const [error, setError] = useState(null)
   const [clients, setClients] = useState([])
   const [services, setServices] = useState([])
+  const [processTemplates, setProcessTemplates] = useState([])
+  const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [formData, setFormData] = useState({
     name: '',
     client_id: '',
@@ -34,6 +36,7 @@ export default function EditProject() {
       fetchProjectData()
       fetchClients()
       fetchServices()
+      fetchProcessTemplates()
     }
   }, [id])
 
@@ -52,6 +55,9 @@ export default function EditProject() {
             end_date: new Date(phase.end_date).toISOString().split('T')[0]
           }))
         })
+        if (data.template_id) {
+          setSelectedTemplate({ template_id: data.template_id })
+        }
       } else {
         throw new Error('Failed to fetch project')
       }
@@ -86,6 +92,44 @@ export default function EditProject() {
     }
   }
 
+  const fetchProcessTemplates = async () => {
+    try {
+      const response = await fetch('/api/process-templates')
+      if (response.ok) {
+        const data = await response.json()
+        setProcessTemplates(data || [])
+      }
+    } catch (error) {
+      console.error('Failed to fetch process templates:', error)
+    }
+  }
+
+  const handleTemplateSelect = (templateId) => {
+    const template = processTemplates.find(t => t.template_id === templateId)
+    setSelectedTemplate(template)
+    
+    if (template) {
+      // Convert template steps to project phases
+      const phases = template.steps.map(step => ({
+        name: step.name,
+        status: 'pending',
+        start_date: formData.start_date || '',
+        end_date: formData.end_date || '',
+        estimated_hours: step.estimated_hours,
+        description: step.description,
+        deliverables: step.deliverables || [],
+        required_tools: step.required_tools || [],
+        step_id: step.step_id,
+        order: step.order
+      }))
+
+      setFormData(prev => ({
+        ...prev,
+        phases
+      }))
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setSaving(true)
@@ -96,36 +140,23 @@ export default function EditProject() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          template_id: selectedTemplate?.template_id
+        }),
       })
 
       if (response.ok) {
         router.push(`/projects/${id}`)
       } else {
         const error = await response.json()
-        setError(error.message || 'Failed to update project')
+        throw new Error(error.message || 'Failed to update project')
       }
     } catch (error) {
-      setError('Failed to update project: ' + error.message)
+      setError(error.message)
     } finally {
       setSaving(false)
     }
-  }
-
-  const addPhase = () => {
-    setFormData({
-      ...formData,
-      phases: [
-        ...formData.phases,
-        {
-          name: '',
-          status: 'pending',
-          start_date: '',
-          end_date: '',
-          deliverables: []
-        }
-      ]
-    })
   }
 
   const updatePhase = (index, field, value) => {
@@ -140,6 +171,25 @@ export default function EditProject() {
     })
   }
 
+  const addCustomPhase = () => {
+    setFormData(prev => ({
+      ...prev,
+      phases: [
+        ...prev.phases,
+        {
+          name: '',
+          status: 'pending',
+          start_date: '',
+          end_date: '',
+          estimated_hours: 0,
+          description: '',
+          deliverables: [],
+          custom: true
+        }
+      ]
+    }))
+  }
+
   const removePhase = (index) => {
     const newPhases = [...formData.phases]
     newPhases.splice(index, 1)
@@ -151,6 +201,9 @@ export default function EditProject() {
 
   const addDeliverable = (phaseIndex) => {
     const newPhases = [...formData.phases]
+    if (!newPhases[phaseIndex].deliverables) {
+      newPhases[phaseIndex].deliverables = []
+    }
     newPhases[phaseIndex].deliverables.push('')
     setFormData({
       ...formData,
@@ -345,48 +398,67 @@ export default function EditProject() {
 
             <div className="divider text-lg font-semibold">Project Phases</div>
 
+            <div className="flex justify-between items-center mb-4">
+              <div className="form-control w-full max-w-xs">
+                <label className="label">
+                  <span className="label-text font-medium">Add Template Phases</span>
+                </label>
+                <select
+                  className="select select-bordered w-full"
+                  value={selectedTemplate?.template_id || ''}
+                  onChange={(e) => handleTemplateSelect(e.target.value)}
+                >
+                  <option value="">Select a template</option>
+                  {processTemplates.map((template) => (
+                    <option key={template.template_id} value={template.template_id}>
+                      {template.name} (v{template.version})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                className="btn btn-outline mt-8"
+                onClick={addCustomPhase}
+              >
+                Add Custom Phase
+              </button>
+            </div>
+
             {formData.phases.map((phase, phaseIndex) => (
-              <div key={phaseIndex} className="card bg-base-200 shadow-md p-4 mb-4">
+              <div key={phase.step_id || phaseIndex} className="card bg-base-200 shadow-md p-4 mb-4">
                 <div className="flex justify-between items-start mb-4">
-                  <h3 className="font-medium">Phase {phaseIndex + 1}</h3>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm text-error"
-                    onClick={() => removePhase(phaseIndex)}
-                  >
-                    Remove Phase
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="form-control w-full">
-                    <label className="label">
-                      <span className="label-text font-medium">Phase Name</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Enter phase name"
-                      className="input input-bordered w-full"
-                      value={phase.name}
-                      onChange={(e) => updatePhase(phaseIndex, 'name', e.target.value)}
-                      required
-                    />
+                  <div className="w-full">
+                    {phase.custom ? (
+                      <div className="form-control w-full">
+                        <label className="label">
+                          <span className="label-text font-medium">Phase Name</span>
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Enter phase name"
+                          className="input input-bordered w-full"
+                          value={phase.name}
+                          onChange={(e) => updatePhase(phaseIndex, 'name', e.target.value)}
+                          required
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <h3 className="font-medium">Phase {phaseIndex + 1}: {phase.name}</h3>
+                        <p className="text-sm text-base-content/70">{phase.description}</p>
+                      </>
+                    )}
                   </div>
-
-                  <div className="form-control w-full">
-                    <label className="label">
-                      <span className="label-text font-medium">Status</span>
-                    </label>
-                    <select
-                      className="select select-bordered w-full"
-                      value={phase.status}
-                      onChange={(e) => updatePhase(phaseIndex, 'status', e.target.value)}
-                      required
+                  <div className="flex items-start gap-2">
+                    <div className="badge badge-neutral">{phase.estimated_hours}h</div>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm text-error"
+                      onClick={() => removePhase(phaseIndex)}
                     >
-                      <option value="pending">Pending</option>
-                      <option value="in-progress">In Progress</option>
-                      <option value="completed">Completed</option>
-                    </select>
+                      Remove
+                    </button>
                   </div>
                 </div>
 
@@ -418,47 +490,63 @@ export default function EditProject() {
                   </div>
                 </div>
 
-                <div className="mt-4">
-                  <label className="label">
-                    <span className="label-text font-medium">Deliverables</span>
-                  </label>
-                  {phase.deliverables.map((deliverable, deliverableIndex) => (
-                    <div key={deliverableIndex} className="flex gap-2 mb-2">
-                      <input
-                        type="text"
-                        placeholder="Enter deliverable"
-                        className="input input-bordered w-full"
-                        value={deliverable}
-                        onChange={(e) => updateDeliverable(phaseIndex, deliverableIndex, e.target.value)}
-                        required
-                      />
+                {phase.custom && (
+                  <div className="mt-4">
+                    <div className="flex justify-between items-center">
+                      <h4 className="font-medium">Deliverables</h4>
                       <button
                         type="button"
-                        className="btn btn-ghost btn-sm text-error"
-                        onClick={() => removeDeliverable(phaseIndex, deliverableIndex)}
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => addDeliverable(phaseIndex)}
                       >
-                        Remove
+                        Add Deliverable
                       </button>
                     </div>
-                  ))}
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm mt-2"
-                    onClick={() => addDeliverable(phaseIndex)}
-                  >
-                    Add Deliverable
-                  </button>
-                </div>
+                    {phase.deliverables?.map((deliverable, deliverableIndex) => (
+                      <div key={deliverableIndex} className="flex gap-2 mt-2">
+                        <input
+                          type="text"
+                          placeholder="Enter deliverable"
+                          className="input input-bordered w-full"
+                          value={deliverable}
+                          onChange={(e) => updateDeliverable(phaseIndex, deliverableIndex, e.target.value)}
+                          required
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm text-error"
+                          onClick={() => removeDeliverable(phaseIndex, deliverableIndex)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {!phase.custom && phase.deliverables?.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="font-medium mb-2">Deliverables</h4>
+                    <ul className="list-disc list-inside space-y-1">
+                      {phase.deliverables.map((deliverable, index) => (
+                        <li key={index} className="text-sm">{deliverable}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {!phase.custom && phase.required_tools?.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="font-medium mb-2">Required Tools</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {phase.required_tools.map((tool, index) => (
+                        <div key={index} className="badge badge-outline">{tool}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
-
-            <button
-              type="button"
-              className="btn btn-outline mt-4"
-              onClick={addPhase}
-            >
-              Add Phase
-            </button>
 
             <div className="card-actions justify-end mt-6">
               <button

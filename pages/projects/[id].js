@@ -156,15 +156,22 @@ export default function ProjectDetails() {
               {project.phases.map((phase, index) => (
                 <div key={index} className="collapse collapse-arrow bg-base-200 mb-4">
                   <input type="checkbox" defaultChecked={index === 0} /> 
-                  <div className="collapse-title font-medium">
+                  <div className="collapse-title">
                     <div className="flex justify-between items-center">
-                      <span>{phase.name}</span>
+                      <div>
+                        <span className="font-medium">{phase.name}</span>
+                        <div className="badge badge-neutral ml-2">{phase.estimated_hours}h</div>
+                      </div>
                       <div className={`badge ${getStatusColor(phase.status)}`}>
                         {phase.status}
                       </div>
                     </div>
                   </div>
                   <div className="collapse-content">
+                    {phase.description && (
+                      <p className="text-sm mb-4">{phase.description}</p>
+                    )}
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       <div>
                         <p className="text-sm font-medium">Timeline</p>
@@ -172,16 +179,35 @@ export default function ProjectDetails() {
                           {new Date(phase.start_date).toLocaleDateString()} - {new Date(phase.end_date).toLocaleDateString()}
                         </p>
                       </div>
+                      <div>
+                        <p className="text-sm font-medium">Status</p>
+                        <div className={`badge ${getStatusColor(phase.status)} mt-1`}>
+                          {phase.status}
+                        </div>
+                      </div>
                     </div>
 
-                    <div>
-                      <p className="font-medium mb-2">Deliverables:</p>
-                      <ul className="list-disc list-inside space-y-1">
-                        {phase.deliverables.map((deliverable, dIndex) => (
-                          <li key={dIndex} className="text-sm">{deliverable}</li>
-                        ))}
-                      </ul>
-                    </div>
+                    {phase.deliverables?.length > 0 && (
+                      <div className="mb-4">
+                        <p className="font-medium mb-2">Deliverables:</p>
+                        <ul className="list-disc list-inside space-y-1">
+                          {phase.deliverables.map((deliverable, dIndex) => (
+                            <li key={dIndex} className="text-sm">{deliverable}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {phase.required_tools?.length > 0 && (
+                      <div>
+                        <p className="font-medium mb-2">Required Tools:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {phase.required_tools.map((tool, tIndex) => (
+                            <div key={tIndex} className="badge badge-outline">{tool}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
