@@ -101,7 +101,7 @@ export default function Services() {
                   Billing: <span className="font-medium">{service.billing_type}</span>
                 </div>
                 <button 
-                  onClick={() => router.push(`/services/${service.service_id}`)}
+                  onClick={() => router.push(`/services/${service.service_id}/edit`)}
                   className="btn btn-primary btn-sm"
                 >
                   Edit Service
