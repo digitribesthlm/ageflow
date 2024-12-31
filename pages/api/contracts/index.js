@@ -21,21 +21,47 @@ export default async function handler(req, res) {
       case 'POST':
         const {
           client_id,
-          package_id,
+          packages,  // Now an array of {package_id, quantity}
           start_date,
           end_date,
           monthly_fee,
           billing_frequency,
-          payment_terms
+          payment_terms,
+          contract_type
         } = req.body
+
+        // Validate packages
+        if (!packages || packages.length === 0) {
+          return res.status(400).json({ message: 'At least one package is required' })
+        }
+
+        // Get package details from database
+        const packageIds = packages.map(p => p.package_id)
+        const packageDetails = await db.collection('agency_service_packages')
+          .find({ package_id: { $in: packageIds }, active: true })
+          .toArray()
+
+        // Create package entries with quantities and details
+        const contractPackages = packages.map(pkg => {
+          const details = packageDetails.find(p => p.package_id === pkg.package_id)
+          return {
+            package_id: pkg.package_id,
+            name: details.name,
+            quantity: pkg.quantity,
+            price: details.price,
+            services: details.services,
+            billing_frequency: details.billing_frequency
+          }
+        })
 
         const newContract = {
           contract_id: `CNT${Date.now()}`,
           client_id,
-          package_id,
+          packages: contractPackages,
+          contract_type,
           status: 'active',
           start_date: new Date(start_date),
-          end_date: new Date(end_date),
+          end_date: contract_type === 'one-time' ? new Date(end_date) : null,
           monthly_fee: parseFloat(monthly_fee),
           billing: {
             frequency: billing_frequency,

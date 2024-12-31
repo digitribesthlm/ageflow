@@ -12,12 +12,13 @@ export default function NewContract() {
     const [packages, setPackages] = useState([]);
     const [formData, setFormData] = useState({
         client_id: '',
-        package_id: '',
+        packages: [],
         start_date: '',
         end_date: '',
         monthly_fee: '',
         billing_frequency: 'monthly',
-        payment_terms: 'net-30'
+        payment_terms: 'net-30',
+        contract_type: 'one-time'
     });
 
     useEffect(() => {
@@ -28,12 +29,23 @@ export default function NewContract() {
         try {
             // Fetch clients and service packages
             const [clientsRes, packagesRes] = await Promise.all([
-                fetch('/api/clients'),
-                fetch('/api/service-packages')
+                fetch('/api/clients', {
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }),
+                fetch('/api/service-packages', {
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
             ]);
 
             if (!clientsRes.ok || !packagesRes.ok) {
-                throw new Error('Failed to fetch data');
+                const errorData = !clientsRes.ok ? await clientsRes.json() : await packagesRes.json();
+                throw new Error(errorData.message || 'Failed to fetch data');
             }
 
             const [clientsData, packagesData] = await Promise.all([
@@ -83,6 +95,29 @@ export default function NewContract() {
         }));
     };
 
+    const handlePackageChange = (e) => {
+        const selectedOptions = Array.from(e.target.selectedOptions).map(option => ({
+            package_id: option.value,
+            name: option.text,
+            quantity: 1
+        }));
+        setFormData(prev => ({
+            ...prev,
+            packages: selectedOptions
+        }));
+    };
+
+    const updatePackageQuantity = (packageId, quantity) => {
+        setFormData(prev => ({
+            ...prev,
+            packages: prev.packages.map(pkg => 
+                pkg.package_id === packageId 
+                    ? { ...pkg, quantity: parseInt(quantity) || 1 }
+                    : pkg
+            )
+        }));
+    };
+
     return (
         <DashboardLayout>
             <PageHeader title="Create New Contract" />
@@ -118,21 +153,61 @@ export default function NewContract() {
 
                             <div className="form-control">
                                 <label className="label">
-                                    <span className="label-text">Service Package</span>
+                                    <span className="label-text">Service Packages</span>
                                 </label>
                                 <select
-                                    name="package_id"
-                                    value={formData.package_id}
+                                    multiple
+                                    name="packages"
+                                    onChange={handlePackageChange}
+                                    className="select select-bordered min-h-[120px]"
+                                    required
+                                >
+                                    {packages.map((pkg) => (
+                                        <option key={pkg.package_id} value={pkg.package_id}>
+                                            {pkg.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <label className="label">
+                                    <span className="label-text-alt">Hold Ctrl/Cmd to select multiple packages</span>
+                                </label>
+                            </div>
+
+                            {formData.packages.length > 0 && (
+                                <div className="form-control">
+                                    <label className="label">
+                                        <span className="label-text">Package Quantities</span>
+                                    </label>
+                                    <div className="space-y-2">
+                                        {formData.packages.map((pkg) => (
+                                            <div key={pkg.package_id} className="flex items-center gap-4">
+                                                <span className="flex-grow">{pkg.name}</span>
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    value={pkg.quantity}
+                                                    onChange={(e) => updatePackageQuantity(pkg.package_id, e.target.value)}
+                                                    className="input input-bordered w-24"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="form-control">
+                                <label className="label">
+                                    <span className="label-text">Contract Type</span>
+                                </label>
+                                <select
+                                    name="contract_type"
+                                    value={formData.contract_type}
                                     onChange={handleChange}
                                     className="select select-bordered"
                                     required
                                 >
-                                    <option value="">Select Package</option>
-                                    {packages.map(pkg => (
-                                        <option key={pkg.package_id} value={pkg.package_id}>
-                                            {pkg.name} ({pkg.tier})
-                                        </option>
-                                    ))}
+                                    <option value="one-time">One-time</option>
+                                    <option value="recurring">Recurring</option>
                                 </select>
                             </div>
 
@@ -150,19 +225,21 @@ export default function NewContract() {
                                 />
                             </div>
 
-                            <div className="form-control">
-                                <label className="label">
-                                    <span className="label-text">End Date</span>
-                                </label>
-                                <input
-                                    type="date"
-                                    name="end_date"
-                                    value={formData.end_date}
-                                    onChange={handleChange}
-                                    className="input input-bordered"
-                                    required
-                                />
-                            </div>
+                            {formData.contract_type === 'one-time' && (
+                                <div className="form-control">
+                                    <label className="label">
+                                        <span className="label-text">End Date</span>
+                                    </label>
+                                    <input
+                                        type="date"
+                                        name="end_date"
+                                        value={formData.end_date}
+                                        onChange={handleChange}
+                                        className="input input-bordered"
+                                        required
+                                    />
+                                </div>
+                            )}
 
                             <div className="form-control">
                                 <label className="label">
