@@ -19,7 +19,111 @@ the login function is using a collection called: users
 DO NOT CHANGE THE mongodb.js file its a working file. 
 
 
+Here's a clear explanation of each collection we created and its purpose:
 
+servicePackages:
+
+Stores predefined service bundles (small, medium, large)
+Contains pricing, included services, and contract terms
+Example: "Basic Digital Marketing Package" with SEO and social media
+
+
+services:
+
+Individual services the agency offers
+Includes both retainer services (SEO, social media) and project-based services (website development)
+Contains service descriptions, deliverables, and requirements
+
+
+contracts:
+
+Manages ongoing retainer agreements
+Tracks monthly fees, contract terms, and renewal dates
+Links clients with their chosen service packages
+
+
+projects:
+
+Handles one-time project work (like website builds)
+Tracks project phases, milestones, and budgets
+Different from contracts as they have specific start/end dates
+
+
+tasks:
+
+Individual work items for both projects and contracts
+Can be recurring (monthly SEO tasks) or one-time
+Links to specific employees, projects, or contracts
+
+
+clients:
+
+Client company and contact information
+Business profile and requirements
+Communication preferences and history
+
+
+processTemplates:
+
+Standardized workflows (like Website Quality Audit)
+Contains step-by-step procedures
+Includes time estimates and required deliverables
+
+
+processInstances:
+
+Actual execution of process templates for specific clients
+Tracks progress through process steps
+Records completion dates and deliverables
+
+
+employees:
+
+Staff information and skills
+Tracks capacity and assignments
+Records performance metrics and billing rates
+
+
+timeTracking:
+
+Records hours worked by employees
+Links time to specific projects/tasks
+Tracks billable vs non-billable hours
+
+
+invoices:
+
+Client billing records
+Tracks payments and due dates
+Links to contracts and projects
+
+
+assets:
+
+Client login credentials (Google Analytics, social media)
+Digital assets (logos, brand guidelines)
+Access permissions and verification dates
+
+
+reports:
+
+Performance reports for clients
+Contains metrics and KPIs
+Tracks delivery and client feedback
+
+
+clientCommunications:
+
+Records of meetings and conversations
+Tracks action items and decisions
+Maintains communication history
+
+
+leads:
+
+Potential client information
+Sales pipeline tracking
+Follow-up schedules and notes
 
 // DIGITAL AGENCY SYSTEM - COMPLETE REFERENCE FILE
 // This file contains both database structure and implementation instructions

@@ -40,6 +40,7 @@ export default function DashboardLayout({ children }) {
     { path: '/dashboard', label: 'Dashboard', icon: '📊' },
     { path: '/clients', label: 'Clients', icon: '👥' },
     { path: '/projects', label: 'Projects', icon: '📁' },
+    { path: '/employees', label: 'Employees', icon: '👨‍💼' },
     { path: '/tasks/board', label: 'Task Board', icon: '📋' },
     { path: '/time', label: 'Time Tracking', icon: '⏱️' },
     { path: '/time/reports', label: 'Reports', icon: '📈' },
