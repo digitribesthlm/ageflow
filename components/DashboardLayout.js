@@ -3,17 +3,34 @@ import { useEffect, useState } from 'react';
 import Footer from './Footer';
 
 export default function DashboardLayout({ children }) {
+  console.log('DashboardLayout rendering')
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log('DashboardLayout useEffect running')
     const userData = localStorage.getItem('user');
+    console.log('User data from localStorage:', userData)
+    
     if (!userData) {
+      console.log('No user found, redirecting to login')
       router.push('/');
       return;
     }
-    setUser(JSON.parse(userData));
+    
+    try {
+      const parsedUser = JSON.parse(userData);
+      console.log('Parsed user:', parsedUser)
+      setUser(parsedUser);
+    } catch (error) {
+      console.error('Error parsing user data:', error)
+      localStorage.removeItem('user');
+      router.push('/');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const handleLogout = async (e) => {
@@ -51,8 +68,20 @@ export default function DashboardLayout({ children }) {
 
   const isActive = (path) => router.pathname === path;
 
-  if (!user) return null;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <span className="loading loading-spinner loading-lg"></span>
+      </div>
+    );
+  }
 
+  if (!user) {
+    console.log('No user, returning null')
+    return null;
+  }
+
+  console.log('Rendering full DashboardLayout')
   return (
     <div className="min-h-screen flex">
       {/* Sidebar */}

@@ -1,66 +1,95 @@
 import { useRouter } from 'next/router'
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
 import PageHeader from '../../components/PageHeader'
 import ContentContainer from '../../components/ContentContainer'
 
 export default function NewServicePackage() {
+    console.log('NewServicePackage component mounted')
     const router = useRouter()
-    const [loading, setLoading] = useState(false)
+    const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
     const [error, setError] = useState(null)
     const [services, setServices] = useState([])
     const [formData, setFormData] = useState({
         name: '',
         description: '',
-        tier: 'small',
-        package_type: 'retainer',
-        includedServices: [], // Array of {service_id, quantity}
+        includedServices: [],
         basePrice: '',
         billing_frequency: 'monthly',
+        package_type: 'retainer',
+        tier: 'small',
         minimum_contract_months: 6
     })
 
     useEffect(() => {
+        console.log('NewServicePackage useEffect running')
+        const user = localStorage.getItem('user')
+        if (!user) {
+            console.log('No user found, redirecting to login')
+            router.push('/')
+            return
+        }
         fetchServices()
     }, [])
 
     const fetchServices = async () => {
         try {
-            const response = await fetch('/api/services', {
-                credentials: 'include',  // Include cookies in the request
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-            if (response.ok) {
-                const data = await response.json()
-                setServices(data)
-            } else {
-                const errorData = await response.json()
-                setError(errorData.message || 'Failed to fetch services')
+            console.log('Fetching services...')
+            const response = await fetch('/api/services')
+            console.log('Services response status:', response.status)
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch services')
             }
+            const data = await response.json()
+            console.log('Fetched services:', data)
+            setServices(data)
         } catch (error) {
-            setError('Error fetching services: ' + error.message)
+            console.error('Error fetching services:', error)
+            setError(error.message)
+        } finally {
+            setLoading(false)
         }
     }
 
-    const handleChange = (e) => {
-        const { name, value } = e.target
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }))
+    const handleSubmit = async (e) => {
+        e.preventDefault()
+        setSaving(true)
+        setError(null)
+
+        try {
+            const response = await fetch('/api/service-packages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData),
+            })
+
+            if (response.ok) {
+                router.push('/service-packages')
+            } else {
+                const error = await response.json()
+                throw new Error(error.message || 'Failed to create service package')
+            }
+        } catch (error) {
+            setError(error.message)
+            setSaving(false)
+        }
     }
 
     const handleServiceSelection = (e) => {
-        const selectedServices = Array.from(e.target.selectedOptions).map(option => ({
-            service_id: option.value,
-            name: option.text,
-            quantity: 1
-        }))
+        const selectedOptions = Array.from(e.target.selectedOptions).map(option => {
+            const existingService = formData.includedServices.find(s => s.service_id === option.value)
+            return {
+                service_id: option.value,
+                quantity: existingService?.quantity || 1
+            }
+        })
         setFormData(prev => ({
             ...prev,
-            includedServices: selectedServices
+            includedServices: selectedOptions
         }))
     }
 
@@ -75,87 +104,88 @@ export default function NewServicePackage() {
         }))
     }
 
-    const handleSubmit = async (e) => {
-        e.preventDefault()
-        setLoading(true)
-        setError(null)
-
-        try {
-            const response = await fetch('/api/service-packages', {
-                method: 'POST',
-                credentials: 'include',  // Include cookies in the request
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(formData)
-            })
-
-            if (response.ok) {
-                router.push('/service-packages')
-            } else {
-                const data = await response.json()
-                setError(data.message || 'Failed to create service package')
-            }
-        } catch (error) {
-            setError('Error creating service package: ' + error.message)
-        } finally {
-            setLoading(false)
-        }
+    if (loading) {
+        return (
+            <DashboardLayout>
+                <div className="flex justify-center items-center min-h-[200px]">
+                    <span className="loading loading-spinner loading-lg"></span>
+                </div>
+            </DashboardLayout>
+        )
     }
 
     return (
         <DashboardLayout>
-            <PageHeader title="Create Service Package" />
+            <PageHeader 
+                title="Create Service Package"
+                actions={
+                    <button
+                        onClick={() => router.back()}
+                        className="btn btn-ghost"
+                    >
+                        Cancel
+                    </button>
+                }
+            />
             <ContentContainer>
-                <div className="max-w-4xl mx-auto">
-                    <form onSubmit={handleSubmit} className="space-y-6 bg-base-100 p-6 rounded-lg shadow-lg">
+                <div className="card bg-base-100 shadow-xl">
+                    <form onSubmit={handleSubmit} className="card-body">
                         {error && (
-                            <div className="alert alert-error">
+                            <div className="alert alert-error mb-4">
                                 <span>{error}</span>
                             </div>
                         )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="form-control">
-                                <label className="label">
-                                    <span className="label-text">Package Name</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    name="name"
-                                    value={formData.name}
-                                    onChange={handleChange}
-                                    className="input input-bordered"
-                                    required
-                                />
-                            </div>
+                        <div className="form-control w-full">
+                            <label className="label">
+                                <span className="label-text font-medium">Package Name</span>
+                            </label>
+                            <input
+                                type="text"
+                                placeholder="Enter package name"
+                                className="input input-bordered w-full"
+                                value={formData.name}
+                                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                                required
+                            />
+                        </div>
 
-                            <div className="form-control">
+                        <div className="form-control w-full">
+                            <label className="label">
+                                <span className="label-text font-medium">Description</span>
+                            </label>
+                            <textarea
+                                className="textarea textarea-bordered h-24"
+                                placeholder="Enter package description"
+                                value={formData.description}
+                                onChange={(e) => setFormData({...formData, description: e.target.value})}
+                            ></textarea>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="form-control w-full">
                                 <label className="label">
-                                    <span className="label-text">Package Type</span>
+                                    <span className="label-text font-medium">Package Type</span>
                                 </label>
                                 <select
-                                    name="package_type"
+                                    className="select select-bordered w-full"
                                     value={formData.package_type}
-                                    onChange={handleChange}
-                                    className="select select-bordered"
+                                    onChange={(e) => setFormData({...formData, package_type: e.target.value})}
                                     required
                                 >
                                     <option value="retainer">Retainer</option>
                                     <option value="project">Project</option>
-                                    <option value="one-time">One-time</option>
                                 </select>
                             </div>
 
-                            <div className="form-control">
+                            <div className="form-control w-full">
                                 <label className="label">
-                                    <span className="label-text">Tier</span>
+                                    <span className="label-text font-medium">Tier</span>
                                 </label>
                                 <select
-                                    name="tier"
+                                    className="select select-bordered w-full"
                                     value={formData.tier}
-                                    onChange={handleChange}
-                                    className="select select-bordered"
+                                    onChange={(e) => setFormData({...formData, tier: e.target.value})}
                                     required
                                 >
                                     <option value="small">Small</option>
@@ -164,136 +194,109 @@ export default function NewServicePackage() {
                                     <option value="enterprise">Enterprise</option>
                                 </select>
                             </div>
-
-                            <div className="form-control md:col-span-2">
-                                <label className="label">
-                                    <span className="label-text">Description</span>
-                                </label>
-                                <textarea
-                                    name="description"
-                                    value={formData.description}
-                                    onChange={handleChange}
-                                    className="textarea textarea-bordered h-24"
-                                    required
-                                />
-                            </div>
                         </div>
 
-                        <div className="space-y-4">
-                            <div className="form-control">
-                                <label className="label">
-                                    <span className="label-text">Services</span>
-                                </label>
-                                <select
-                                    multiple
-                                    onChange={handleServiceSelection}
-                                    className="select select-bordered min-h-[200px]"
-                                    required
-                                >
-                                    {services.map(service => (
-                                        <option key={service.service_id} value={service.service_id}>
-                                            {service.name}
-                                        </option>
-                                    ))}
-                                </select>
-                                <label className="label">
-                                    <span className="label-text-alt">Hold Ctrl/Cmd to select multiple services</span>
-                                </label>
-                            </div>
+                        <div className="form-control w-full">
+                            <label className="label">
+                                <span className="label-text font-medium">Included Services</span>
+                            </label>
+                            <select
+                                multiple
+                                className="select select-bordered min-h-[200px]"
+                                value={formData.includedServices.map(s => s.service_id)}
+                                onChange={handleServiceSelection}
+                                required
+                            >
+                                {services.map(service => (
+                                    <option key={service.service_id} value={service.service_id}>
+                                        {service.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <label className="label">
+                                <span className="label-text-alt">Hold Ctrl/Cmd to select multiple services</span>
+                            </label>
+                        </div>
 
-                            {formData.includedServices.length > 0 && (
-                                <div className="space-y-4">
-                                    <h3 className="font-medium">Service Quantities</h3>
-                                    {formData.includedServices.map((service) => (
-                                        <div key={service.service_id} className="card bg-base-200">
-                                            <div className="card-body">
-                                                <div className="flex items-center justify-between">
-                                                    <h4 className="font-medium">{service.name}</h4>
-                                                    <div className="form-control w-32">
-                                                        <label className="label">
-                                                            <span className="label-text">Quantity</span>
-                                                        </label>
-                                                        <input
-                                                            type="number"
-                                                            min="1"
-                                                            value={service.quantity}
-                                                            onChange={(e) => updateServiceQuantity(service.service_id, e.target.value)}
-                                                            className="input input-bordered w-full"
-                                                        />
-                                                    </div>
-                                                </div>
+                        {formData.includedServices.length > 0 && (
+                            <div className="form-control w-full">
+                                <label className="label">
+                                    <span className="label-text font-medium">Service Quantities</span>
+                                </label>
+                                <div className="space-y-2">
+                                    {formData.includedServices.map((service) => {
+                                        const serviceDetails = services.find(s => s.service_id === service.service_id)
+                                        return (
+                                            <div key={service.service_id} className="flex items-center gap-4">
+                                                <span className="flex-grow">{serviceDetails?.name || 'Unknown Service'}</span>
+                                                <input
+                                                    type="number"
+                                                    min="1"
+                                                    value={service.quantity}
+                                                    onChange={(e) => updateServiceQuantity(service.service_id, e.target.value)}
+                                                    className="input input-bordered w-24"
+                                                />
                                             </div>
-                                        </div>
-                                    ))}
+                                        )
+                                    })}
                                 </div>
-                            )}
-                        </div>
+                            </div>
+                        )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="form-control">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="form-control w-full">
                                 <label className="label">
-                                    <span className="label-text">Base Price</span>
+                                    <span className="label-text font-medium">Base Price</span>
                                 </label>
                                 <input
                                     type="number"
-                                    name="basePrice"
+                                    placeholder="Enter base price"
+                                    className="input input-bordered w-full"
                                     value={formData.basePrice}
-                                    onChange={handleChange}
-                                    className="input input-bordered"
+                                    onChange={(e) => setFormData({...formData, basePrice: e.target.value})}
                                     required
-                                    min="0"
                                 />
                             </div>
 
-                            <div className="form-control">
+                            <div className="form-control w-full">
                                 <label className="label">
-                                    <span className="label-text">Billing Frequency</span>
+                                    <span className="label-text font-medium">Billing Frequency</span>
                                 </label>
                                 <select
-                                    name="billing_frequency"
+                                    className="select select-bordered w-full"
                                     value={formData.billing_frequency}
-                                    onChange={handleChange}
-                                    className="select select-bordered"
+                                    onChange={(e) => setFormData({...formData, billing_frequency: e.target.value})}
                                     required
                                 >
                                     <option value="monthly">Monthly</option>
                                     <option value="quarterly">Quarterly</option>
-                                    <option value="semi-annual">Semi-Annual</option>
-                                    <option value="annual">Annual</option>
+                                    <option value="yearly">Yearly</option>
                                 </select>
-                            </div>
-
-                            <div className="form-control">
-                                <label className="label">
-                                    <span className="label-text">Minimum Contract Months</span>
-                                </label>
-                                <input
-                                    type="number"
-                                    name="minimum_contract_months"
-                                    value={formData.minimum_contract_months}
-                                    onChange={handleChange}
-                                    className="input input-bordered"
-                                    required
-                                    min="1"
-                                />
                             </div>
                         </div>
 
-                        <div className="flex justify-end gap-4">
-                            <button
-                                type="button"
-                                onClick={() => router.back()}
-                                className="btn btn-ghost"
-                            >
-                                Cancel
-                            </button>
+                        <div className="form-control w-full">
+                            <label className="label">
+                                <span className="label-text font-medium">Minimum Contract Months</span>
+                            </label>
+                            <input
+                                type="number"
+                                placeholder="Enter minimum contract months"
+                                className="input input-bordered w-full"
+                                value={formData.minimum_contract_months}
+                                onChange={(e) => setFormData({...formData, minimum_contract_months: e.target.value})}
+                                required
+                            />
+                        </div>
+
+                        <div className="card-actions justify-end mt-6">
                             <button
                                 type="submit"
                                 className="btn btn-primary"
-                                disabled={loading}
+                                disabled={saving}
                             >
-                                {loading ? (
-                                    <span className="loading loading-spinner loading-sm"></span>
+                                {saving ? (
+                                    <span className="loading loading-spinner"></span>
                                 ) : (
                                     'Create Package'
                                 )}

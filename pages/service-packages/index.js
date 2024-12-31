@@ -10,25 +10,27 @@ export default function ServicePackages() {
     const [error, setError] = useState(null)
 
     useEffect(() => {
+        console.log('ServicePackages component mounted')
         fetchPackages()
     }, [])
 
     const fetchPackages = async () => {
         try {
-            const response = await fetch('/api/service-packages', {
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
+            console.log('Fetching packages...')
+            const response = await fetch('/api/service-packages')
+            console.log('Response status:', response.status)
+            
             if (response.ok) {
                 const data = await response.json()
-                setPackages(data)
+                console.log('Fetched packages:', data)
+                setPackages(data || [])
             } else {
                 const errorData = await response.json()
+                console.error('Failed to fetch packages:', errorData)
                 setError(errorData.message || 'Failed to fetch packages')
             }
         } catch (error) {
+            console.error('Error fetching packages:', error)
             setError('Error fetching packages: ' + error.message)
         } finally {
             setLoading(false)
@@ -57,11 +59,13 @@ export default function ServicePackages() {
         }
     }
 
+    console.log('Rendering ServicePackages. Loading:', loading, 'Error:', error, 'Packages:', packages)
+
     return (
         <DashboardLayout>
             <PageHeader 
                 title="Service Packages" 
-                action={
+                actions={
                     <Link href="/service-packages/new" className="btn btn-primary">
                         Create Package
                     </Link>
@@ -77,6 +81,14 @@ export default function ServicePackages() {
                 {loading ? (
                     <div className="flex justify-center items-center h-64">
                         <span className="loading loading-spinner loading-lg"></span>
+                    </div>
+                ) : packages.length === 0 ? (
+                    <div className="text-center p-8">
+                        <h3 className="text-xl font-semibold mb-4">No Service Packages Yet</h3>
+                        <p className="mb-6">Start by creating your first service package</p>
+                        <Link href="/service-packages/new" className="btn btn-primary">
+                            Create Package
+                        </Link>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -99,7 +111,7 @@ export default function ServicePackages() {
                                     <div className="space-y-4">
                                         <h3 className="font-medium">Included Services</h3>
                                         <div className="space-y-2">
-                                            {pkg.services?.map((service) => (
+                                            {pkg.includedServices?.map((service) => (
                                                 <div 
                                                     key={service.service_id} 
                                                     className="bg-base-200 p-3 rounded-lg"
@@ -109,11 +121,6 @@ export default function ServicePackages() {
                                                             <h4 className="font-medium">
                                                                 {service.name}
                                                             </h4>
-                                                            {service.customizations?.notes && (
-                                                                <p className="text-sm text-base-content/70 mt-1">
-                                                                    {service.customizations.notes}
-                                                                </p>
-                                                            )}
                                                         </div>
                                                         {service.quantity > 1 && (
                                                             <span className="badge">
@@ -121,13 +128,6 @@ export default function ServicePackages() {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    {service.customizations?.hours && (
-                                                        <div className="mt-2 text-sm">
-                                                            <span className="text-base-content/70">
-                                                                Hours: {service.customizations.hours}
-                                                            </span>
-                                                        </div>
-                                                    )}
                                                 </div>
                                             ))}
                                         </div>
@@ -138,7 +138,7 @@ export default function ServicePackages() {
                                     <div className="flex justify-between items-center">
                                         <div>
                                             <div className="font-medium">
-                                                {formatPrice(pkg.price)}
+                                                {formatPrice(pkg.basePrice)}
                                             </div>
                                             <div className="text-sm text-base-content/70">
                                                 per {pkg.billing_frequency}
