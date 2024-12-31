@@ -1,16 +1,19 @@
 import { useRouter } from 'next/router'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
 import PageHeader from '../../components/PageHeader'
 import ContentContainer from '../../components/ContentContainer'
 
 export default function TaskBoard() {
   const router = useRouter()
+  const modalRef = useRef(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [tasks, setTasks] = useState([])
   const [employees, setEmployees] = useState([])
+  const [projects, setProjects] = useState([])
   const [draggedTask, setDraggedTask] = useState(null)
+  const [selectedTask, setSelectedTask] = useState(null)
 
   useEffect(() => {
     const user = localStorage.getItem('user')
@@ -20,6 +23,7 @@ export default function TaskBoard() {
     }
     fetchTasks()
     fetchEmployees()
+    fetchProjects()
   }, [])
 
   const fetchTasks = async () => {
@@ -47,6 +51,18 @@ export default function TaskBoard() {
       }
     } catch (error) {
       console.error('Failed to fetch employees:', error)
+    }
+  }
+
+  const fetchProjects = async () => {
+    try {
+      const response = await fetch('/api/projects')
+      if (response.ok) {
+        const data = await response.json()
+        setProjects(data || [])
+      }
+    } catch (error) {
+      console.error('Failed to fetch projects:', error)
     }
   }
 
@@ -102,6 +118,114 @@ export default function TaskBoard() {
     }
   }
 
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'completed':
+        return 'badge-success'
+      case 'in-progress':
+        return 'badge-warning'
+      case 'pending':
+        return 'badge-ghost'
+      case 'blocked':
+        return 'badge-error'
+      default:
+        return 'badge-ghost'
+    }
+  }
+
+  const handleTaskClick = (task) => {
+    setSelectedTask(task)
+    modalRef.current?.showModal()
+  }
+
+  const renderTaskModal = () => {
+    if (!selectedTask) return null
+
+    const project = projects.find(p => p.project_id === selectedTask.project_id)
+    const assignee = employees.find(e => e.employee_id === selectedTask.assigned_to)
+
+    return (
+      <dialog ref={modalRef} className="modal">
+        <div className="modal-box w-11/12 max-w-3xl">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h3 className="text-lg font-bold">{selectedTask.title}</h3>
+              <p className="text-sm text-base-content/70">
+                in {project?.name || 'Unknown Project'}
+              </p>
+            </div>
+            <div className={`badge ${getStatusColor(selectedTask.status)}`}>
+              {selectedTask.status}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div>
+              <h4 className="font-medium mb-2">Details</h4>
+              <div className="bg-base-200 rounded-lg p-4 space-y-2">
+                <p className="text-sm">
+                  <span className="font-medium">Priority:</span>{' '}
+                  <span className={getPriorityColor(selectedTask.priority).replace('border-l-4 ', 'text-')}>
+                    {selectedTask.priority}
+                  </span>
+                </p>
+                <p className="text-sm">
+                  <span className="font-medium">Due Date:</span>{' '}
+                  {new Date(selectedTask.due_date).toLocaleDateString()}
+                </p>
+                <p className="text-sm">
+                  <span className="font-medium">Estimated Hours:</span>{' '}
+                  {selectedTask.estimated_hours}h
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-medium mb-2">Assignment</h4>
+              <div className="bg-base-200 rounded-lg p-4 space-y-2">
+                {assignee ? (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <div className="avatar placeholder">
+                        <div className="bg-neutral text-neutral-content rounded-full w-8">
+                          <span>{assignee.name.charAt(0)}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="font-medium">{assignee.name}</p>
+                        <p className="text-sm text-base-content/70">{assignee.role || 'Team Member'}</p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-base-content/70">Unassigned</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <h4 className="font-medium mb-2">Description</h4>
+            <div className="bg-base-200 rounded-lg p-4">
+              <p className="text-sm whitespace-pre-wrap">
+                {selectedTask.description || 'No description provided.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="modal-action">
+            <form method="dialog">
+              <button className="btn">Close</button>
+            </form>
+          </div>
+        </div>
+        <form method="dialog" className="modal-backdrop">
+          <button>close</button>
+        </form>
+      </dialog>
+    )
+  }
+
   const renderTaskColumn = (title, status, bgColor = 'bg-base-200') => {
     const columnTasks = getTasksByStatus(status)
     
@@ -120,13 +244,14 @@ export default function TaskBoard() {
           {columnTasks.map((task) => (
             <div
               key={task.task_id}
-              className={`card bg-base-100 shadow-sm cursor-move ${getPriorityColor(task.priority)}`}
+              className={`card bg-base-100 shadow-sm cursor-pointer hover:shadow-md transition-shadow ${getPriorityColor(task.priority)}`}
               draggable
               onDragStart={(e) => handleDragStart(e, task.task_id)}
+              onClick={() => handleTaskClick(task)}
             >
               <div className="card-body p-4">
                 <h4 className="card-title text-sm">{task.title}</h4>
-                <p className="text-xs text-base-content/70">{task.description}</p>
+                <p className="text-xs text-base-content/70 line-clamp-2">{task.description}</p>
                 
                 <div className="flex justify-between items-center mt-2">
                   <div className="flex items-center gap-2">
@@ -189,6 +314,8 @@ export default function TaskBoard() {
           {renderTaskColumn('Completed', 'completed', 'bg-success/10')}
           {renderTaskColumn('Blocked', 'blocked', 'bg-error/10')}
         </div>
+
+        {renderTaskModal()}
       </ContentContainer>
     </DashboardLayout>
   )
