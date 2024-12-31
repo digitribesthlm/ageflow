@@ -1,13 +1,16 @@
 import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
+import PageHeader from '../../components/PageHeader'
+import ContentContainer from '../../components/ContentContainer'
 
 export default function TaskBoard() {
   const router = useRouter()
-  const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
-
-  const columns = ['pending', 'in-progress', 'completed']
+  const [error, setError] = useState(null)
+  const [tasks, setTasks] = useState([])
+  const [employees, setEmployees] = useState([])
+  const [draggedTask, setDraggedTask] = useState(null)
 
   useEffect(() => {
     const user = localStorage.getItem('user')
@@ -16,35 +19,34 @@ export default function TaskBoard() {
       return
     }
     fetchTasks()
+    fetchEmployees()
   }, [])
 
   const fetchTasks = async () => {
     try {
       const response = await fetch('/api/tasks')
-      const data = await response.json()
-      setTasks(data)
+      if (response.ok) {
+        const data = await response.json()
+        setTasks(data || [])
+      } else {
+        throw new Error('Failed to fetch tasks')
+      }
     } catch (error) {
-      console.error('Failed to fetch tasks:', error)
+      setError(error.message)
     } finally {
       setLoading(false)
     }
   }
 
-  const updateTaskStatus = async (taskId, newStatus) => {
+  const fetchEmployees = async () => {
     try {
-      const response = await fetch(`/api/tasks/${taskId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: newStatus }),
-      })
-
+      const response = await fetch('/api/employees')
       if (response.ok) {
-        fetchTasks() // Refresh tasks after update
+        const data = await response.json()
+        setEmployees(data || [])
       }
     } catch (error) {
-      console.error('Failed to update task:', error)
+      console.error('Failed to fetch employees:', error)
     }
   }
 
@@ -53,82 +55,141 @@ export default function TaskBoard() {
   }
 
   const handleDragStart = (e, taskId) => {
-    e.dataTransfer.setData('taskId', taskId)
+    setDraggedTask(taskId)
+    e.dataTransfer.effectAllowed = 'move'
   }
 
   const handleDragOver = (e) => {
     e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
   }
 
   const handleDrop = async (e, status) => {
     e.preventDefault()
-    const taskId = e.dataTransfer.getData('taskId')
-    await updateTaskStatus(taskId, status)
+    if (!draggedTask) return
+
+    try {
+      const response = await fetch(`/api/tasks/${draggedTask}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status }),
+      })
+
+      if (response.ok) {
+        await fetchTasks()
+      } else {
+        throw new Error('Failed to update task status')
+      }
+    } catch (error) {
+      setError(error.message)
+    }
+
+    setDraggedTask(null)
+  }
+
+  const getPriorityColor = (priority) => {
+    switch (priority) {
+      case 'high':
+        return 'border-l-4 border-error'
+      case 'medium':
+        return 'border-l-4 border-warning'
+      case 'low':
+        return 'border-l-4 border-info'
+      default:
+        return ''
+    }
+  }
+
+  const renderTaskColumn = (title, status, bgColor = 'bg-base-200') => {
+    const columnTasks = getTasksByStatus(status)
+    
+    return (
+      <div 
+        className={`flex flex-col w-full md:w-72 ${bgColor} rounded-lg p-4`}
+        onDragOver={handleDragOver}
+        onDrop={(e) => handleDrop(e, status)}
+      >
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-medium">{title}</h3>
+          <span className="badge">{columnTasks.length}</span>
+        </div>
+
+        <div className="space-y-3">
+          {columnTasks.map((task) => (
+            <div
+              key={task.task_id}
+              className={`card bg-base-100 shadow-sm cursor-move ${getPriorityColor(task.priority)}`}
+              draggable
+              onDragStart={(e) => handleDragStart(e, task.task_id)}
+            >
+              <div className="card-body p-4">
+                <h4 className="card-title text-sm">{task.title}</h4>
+                <p className="text-xs text-base-content/70">{task.description}</p>
+                
+                <div className="flex justify-between items-center mt-2">
+                  <div className="flex items-center gap-2">
+                    <div className="avatar placeholder">
+                      <div className="bg-neutral text-neutral-content rounded-full w-6">
+                        <span className="text-xs">
+                          {employees.find(e => e.employee_id === task.assigned_to)?.name?.charAt(0) || '?'}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-xs">
+                      Due: {new Date(task.due_date).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="badge badge-sm">
+                    {task.estimated_hours}h
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex justify-center items-center min-h-screen">
+          <span className="loading loading-spinner loading-lg"></span>
+        </div>
+      </DashboardLayout>
+    )
   }
 
   return (
     <DashboardLayout>
-      <div className="p-4">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Task Board</h1>
-          <button 
+      <PageHeader 
+        title="Task Board"
+        actions={
+          <button
             onClick={() => router.push('/tasks/new')}
             className="btn btn-primary"
           >
-            Add Task
+            New Task
           </button>
-        </div>
-
-        {loading ? (
-          <div className="flex justify-center">
-            <span className="loading loading-spinner loading-lg"></span>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {columns.map((column) => (
-              <div 
-                key={column}
-                className="bg-base-200 p-4 rounded-lg"
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, column)}
-              >
-                <h2 className="text-lg font-semibold capitalize mb-4">{column}</h2>
-                <div className="space-y-2">
-                  {getTasksByStatus(column).map((task) => (
-                    <div 
-                      key={task.task_id}
-                      className="card bg-base-100 shadow-sm cursor-move"
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, task.task_id)}
-                    >
-                      <div className="card-body p-4">
-                        <h3 className="card-title text-sm">{task.name}</h3>
-                        <p className="text-xs text-gray-500">
-                          Project: {task.project_id}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Due: {new Date(task.deadline).toLocaleDateString()}
-                        </p>
-                        <div className="flex justify-between items-center mt-2">
-                          <span className="text-xs text-gray-500">
-                            Assigned to: {task.assigned_to}
-                          </span>
-                          <button
-                            onClick={() => router.push(`/tasks/${task.task_id}`)}
-                            className="btn btn-xs btn-ghost"
-                          >
-                            Details
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
+        }
+      />
+      <ContentContainer>
+        {error && (
+          <div className="alert alert-error mb-4">
+            <span>{error}</span>
           </div>
         )}
-      </div>
+
+        <div className="flex flex-col md:flex-row gap-6 overflow-x-auto pb-6">
+          {renderTaskColumn('Pending', 'pending')}
+          {renderTaskColumn('In Progress', 'in-progress', 'bg-warning/10')}
+          {renderTaskColumn('Completed', 'completed', 'bg-success/10')}
+          {renderTaskColumn('Blocked', 'blocked', 'bg-error/10')}
+        </div>
+      </ContentContainer>
     </DashboardLayout>
   )
 } 

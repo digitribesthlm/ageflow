@@ -1,4 +1,5 @@
 import { connectToDatabase } from '../../../utils/mongodb'
+import { v4 as uuidv4 } from 'uuid'
 
 export default async function handler(req, res) {
   try {
@@ -12,26 +13,54 @@ export default async function handler(req, res) {
 
     switch (req.method) {
       case 'GET':
+        const { project_id } = req.query
+        
+        // Build query based on whether project_id is provided
+        const query = {
+          active: { $ne: false }
+        }
+        if (project_id) {
+          query.project_id = project_id
+        }
+
         const tasks = await db.collection('agency_tasks')
-          .find({})
-          .sort({ deadline: 1 })
+          .find(query)
+          .sort({ created_at: -1 })
           .toArray()
-        return res.status(200).json(tasks)
+
+        return res.status(200).json(tasks || [])
 
       case 'POST':
-        const { name, contract_id, project_id, service_id, assigned_to, deadline } = req.body
-        const newTask = {
-          task_id: `TSK${Date.now()}`,
-          name,
-          contract_id,
-          project_id,
-          service_id,
+        const {
+          title,
+          description,
+          project_id: taskProjectId,
           assigned_to,
-          status: 'pending',
-          deadline: new Date(deadline),
-          active: true,
-          created_at: new Date()
+          status,
+          priority,
+          due_date,
+          estimated_hours
+        } = req.body
+
+        if (!title || !taskProjectId) {
+          return res.status(400).json({ message: 'Title and project ID are required' })
         }
+
+        const newTask = {
+          task_id: uuidv4(),
+          title,
+          description,
+          project_id: taskProjectId,
+          assigned_to,
+          status: status || 'pending',
+          priority: priority || 'medium',
+          due_date: new Date(due_date),
+          estimated_hours: parseFloat(estimated_hours) || 0,
+          active: true,
+          created_at: new Date(),
+          updated_at: new Date()
+        }
+
         await db.collection('agency_tasks').insertOne(newTask)
         return res.status(201).json(newTask)
 
