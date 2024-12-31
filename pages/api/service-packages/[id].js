@@ -10,96 +10,90 @@ export default async function handler(req, res) {
         const { db } = await connectToDatabase()
         const { id } = req.query
 
+        if (!id) {
+            return res.status(400).json({ message: 'Package ID is required' })
+        }
+
         switch (req.method) {
             case 'GET':
                 const servicePackage = await db.collection('agency_service_packages')
-                    .findOne({ package_id: id, active: { $ne: false } })
+                    .findOne({ package_id: id })
 
                 if (!servicePackage) {
                     return res.status(404).json({ message: 'Service package not found' })
                 }
 
                 // Get service details
-                const serviceIds = servicePackage.services.map(s => s.service_id)
-                const services = await db.collection('agency_services')
+                const serviceIds = servicePackage.includedServices.map(s => s.service_id)
+                const serviceDetails = await db.collection('agency_services')
                     .find({ service_id: { $in: serviceIds }, active: true })
                     .toArray()
 
                 // Populate service details
-                const servicePackageWithServices = {
+                const packageWithServices = {
                     ...servicePackage,
-                    services: servicePackage.services.map(serviceRef => {
-                        const serviceDetails = services.find(s => s.service_id === serviceRef.service_id)
+                    includedServices: servicePackage.includedServices.map(serviceRef => {
+                        const details = serviceDetails.find(s => s.service_id === serviceRef.service_id)
                         return {
                             ...serviceRef,
-                            name: serviceDetails?.name || 'Unknown Service',
-                            category: serviceDetails?.category,
-                            description: serviceDetails?.description,
-                            deliverables: serviceDetails?.deliverables
+                            name: details?.name || 'Unknown Service',
+                            category: details?.category,
+                            description: details?.description,
+                            deliverables: details?.deliverables
                         }
                     })
                 }
 
-                return res.status(200).json(servicePackageWithServices)
+                return res.status(200).json(packageWithServices)
 
             case 'PUT':
                 const {
                     name,
                     description,
-                    services,
-                    price,
+                    includedServices,
+                    basePrice,
                     billing_frequency,
-                    tier
+                    package_type,
+                    tier,
+                    minimum_contract_months
                 } = req.body
 
-                if (!name || !services || !Array.isArray(services) || services.length === 0 || !price || !billing_frequency) {
-                    return res.status(400).json({
-                        message: 'Name, services (as array), price, and billing frequency are required'
-                    })
-                }
-
-                // Verify all services exist
-                const updateServiceIds = services.map(s => s.service_id)
-                const existingServices = await db.collection('agency_services')
-                    .find({ service_id: { $in: updateServiceIds }, active: true })
-                    .toArray()
-
-                if (existingServices.length !== updateServiceIds.length) {
-                    return res.status(400).json({ message: 'One or more services do not exist' })
-                }
-
-                const updatedServicePackage = {
+                const updateData = {
                     name,
                     description,
-                    tier: tier || 'standard',
-                    services: services.map(service => ({
+                    tier: tier || 'small',
+                    package_type: package_type || 'retainer',
+                    includedServices: includedServices.map(service => ({
                         service_id: service.service_id,
-                        quantity: parseInt(service.quantity) || 1,
-                        customizations: service.customizations || {}
+                        quantity: parseInt(service.quantity) || 1
                     })),
-                    price: parseFloat(price),
+                    basePrice: parseInt(basePrice),
                     billing_frequency,
+                    minimum_contract_months: parseInt(minimum_contract_months) || 6,
                     updated_at: new Date()
                 }
 
-                const result = await db.collection('agency_service_packages')
-                    .updateOne(
-                        { package_id: id },
-                        { $set: updatedServicePackage }
-                    )
+                const result = await db.collection('agency_service_packages').updateOne(
+                    { package_id: id },
+                    { $set: updateData }
+                )
 
                 if (result.matchedCount === 0) {
                     return res.status(404).json({ message: 'Service package not found' })
                 }
 
-                return res.status(200).json({ ...updatedServicePackage, package_id: id })
+                return res.status(200).json({ message: 'Service package updated successfully' })
 
             case 'DELETE':
-                const deleteResult = await db.collection('agency_service_packages')
-                    .updateOne(
-                        { package_id: id },
-                        { $set: { active: false, deleted_at: new Date() } }
-                    )
+                const deleteResult = await db.collection('agency_service_packages').updateOne(
+                    { package_id: id },
+                    { 
+                        $set: {
+                            active: false,
+                            updated_at: new Date()
+                        }
+                    }
+                )
 
                 if (deleteResult.matchedCount === 0) {
                     return res.status(404).json({ message: 'Service package not found' })
@@ -112,7 +106,7 @@ export default async function handler(req, res) {
                 return res.status(405).json({ message: `Method ${req.method} Not Allowed` })
         }
     } catch (error) {
-        console.error('Service Package API error:', error)
+        console.error('Service Packages API error:', error)
         res.status(500).json({ message: 'Internal server error' })
     }
 }
