@@ -1,33 +1,60 @@
 import { useRouter } from 'next/router'
 import { useState, useEffect } from 'react'
-import DashboardLayout from '../../components/DashboardLayout'
-import PageHeader from '../../components/PageHeader'
-import ContentContainer from '../../components/ContentContainer'
+import DashboardLayout from '../../../components/DashboardLayout'
+import PageHeader from '../../../components/PageHeader'
+import ContentContainer from '../../../components/ContentContainer'
 
-export default function NewServicePackage() {
+export default function EditServicePackage() {
     const router = useRouter()
-    const [loading, setLoading] = useState(false)
+    const { id } = router.query
+    const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
     const [error, setError] = useState(null)
     const [services, setServices] = useState([])
     const [formData, setFormData] = useState({
         name: '',
         description: '',
-        tier: 'small',
-        package_type: 'retainer',
-        includedServices: [], // Array of {service_id, quantity}
-        basePrice: '',
-        billing_frequency: 'monthly',
-        minimum_contract_months: 6
+        tier: 'standard',
+        services: [], // Array of {service_id, quantity, customizations}
+        price: '',
+        billing_frequency: 'monthly'
     })
 
     useEffect(() => {
-        fetchServices()
-    }, [])
+        if (id) {
+            Promise.all([
+                fetchPackage(),
+                fetchServices()
+            ])
+        }
+    }, [id])
+
+    const fetchPackage = async () => {
+        try {
+            const response = await fetch(`/api/service-packages/${id}`, {
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            if (response.ok) {
+                const data = await response.json()
+                setFormData(data)
+            } else {
+                const errorData = await response.json()
+                setError(errorData.message || 'Failed to fetch package')
+            }
+        } catch (error) {
+            setError('Error fetching package: ' + error.message)
+        } finally {
+            setLoading(false)
+        }
+    }
 
     const fetchServices = async () => {
         try {
             const response = await fetch('/api/services', {
-                credentials: 'include',  // Include cookies in the request
+                credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json'
                 }
@@ -53,21 +80,26 @@ export default function NewServicePackage() {
     }
 
     const handleServiceSelection = (e) => {
-        const selectedServices = Array.from(e.target.selectedOptions).map(option => ({
-            service_id: option.value,
-            name: option.text,
-            quantity: 1
-        }))
+        const selectedServices = Array.from(e.target.selectedOptions).map(option => {
+            // Check if service was already selected to keep existing customizations
+            const existingService = formData.services.find(s => s.service_id === option.value)
+            return existingService || {
+                service_id: option.value,
+                name: option.text,
+                quantity: 1,
+                customizations: {}
+            }
+        })
         setFormData(prev => ({
             ...prev,
-            includedServices: selectedServices
+            services: selectedServices
         }))
     }
 
     const updateServiceQuantity = (serviceId, quantity) => {
         setFormData(prev => ({
             ...prev,
-            includedServices: prev.includedServices.map(service => 
+            services: prev.services.map(service => 
                 service.service_id === serviceId 
                     ? { ...service, quantity: parseInt(quantity) || 1 }
                     : service
@@ -75,15 +107,32 @@ export default function NewServicePackage() {
         }))
     }
 
+    const updateServiceCustomization = (serviceId, field, value) => {
+        setFormData(prev => ({
+            ...prev,
+            services: prev.services.map(service => 
+                service.service_id === serviceId 
+                    ? { 
+                        ...service, 
+                        customizations: { 
+                            ...service.customizations, 
+                            [field]: value 
+                        } 
+                    }
+                    : service
+            )
+        }))
+    }
+
     const handleSubmit = async (e) => {
         e.preventDefault()
-        setLoading(true)
+        setSaving(true)
         setError(null)
 
         try {
-            const response = await fetch('/api/service-packages', {
-                method: 'POST',
-                credentials: 'include',  // Include cookies in the request
+            const response = await fetch(`/api/service-packages/${id}`, {
+                method: 'PUT',
+                credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
                 },
@@ -94,18 +143,28 @@ export default function NewServicePackage() {
                 router.push('/service-packages')
             } else {
                 const data = await response.json()
-                setError(data.message || 'Failed to create service package')
+                setError(data.message || 'Failed to update service package')
             }
         } catch (error) {
-            setError('Error creating service package: ' + error.message)
+            setError('Error updating service package: ' + error.message)
         } finally {
-            setLoading(false)
+            setSaving(false)
         }
+    }
+
+    if (loading) {
+        return (
+            <DashboardLayout>
+                <div className="flex justify-center items-center h-64">
+                    <span className="loading loading-spinner loading-lg"></span>
+                </div>
+            </DashboardLayout>
+        )
     }
 
     return (
         <DashboardLayout>
-            <PageHeader title="Create Service Package" />
+            <PageHeader title="Edit Service Package" />
             <ContentContainer>
                 <div className="max-w-4xl mx-auto">
                     <form onSubmit={handleSubmit} className="space-y-6 bg-base-100 p-6 rounded-lg shadow-lg">
@@ -132,23 +191,6 @@ export default function NewServicePackage() {
 
                             <div className="form-control">
                                 <label className="label">
-                                    <span className="label-text">Package Type</span>
-                                </label>
-                                <select
-                                    name="package_type"
-                                    value={formData.package_type}
-                                    onChange={handleChange}
-                                    className="select select-bordered"
-                                    required
-                                >
-                                    <option value="retainer">Retainer</option>
-                                    <option value="project">Project</option>
-                                    <option value="one-time">One-time</option>
-                                </select>
-                            </div>
-
-                            <div className="form-control">
-                                <label className="label">
                                     <span className="label-text">Tier</span>
                                 </label>
                                 <select
@@ -158,9 +200,9 @@ export default function NewServicePackage() {
                                     className="select select-bordered"
                                     required
                                 >
-                                    <option value="small">Small</option>
-                                    <option value="medium">Medium</option>
-                                    <option value="large">Large</option>
+                                    <option value="basic">Basic</option>
+                                    <option value="standard">Standard</option>
+                                    <option value="premium">Premium</option>
                                     <option value="enterprise">Enterprise</option>
                                 </select>
                             </div>
@@ -188,6 +230,7 @@ export default function NewServicePackage() {
                                     multiple
                                     onChange={handleServiceSelection}
                                     className="select select-bordered min-h-[200px]"
+                                    value={formData.services.map(s => s.service_id)}
                                     required
                                 >
                                     {services.map(service => (
@@ -201,15 +244,16 @@ export default function NewServicePackage() {
                                 </label>
                             </div>
 
-                            {formData.includedServices.length > 0 && (
+                            {formData.services.length > 0 && (
                                 <div className="space-y-4">
-                                    <h3 className="font-medium">Service Quantities</h3>
-                                    {formData.includedServices.map((service) => (
+                                    <h3 className="font-medium">Service Configuration</h3>
+                                    {formData.services.map((service) => (
                                         <div key={service.service_id} className="card bg-base-200">
                                             <div className="card-body">
-                                                <div className="flex items-center justify-between">
-                                                    <h4 className="font-medium">{service.name}</h4>
-                                                    <div className="form-control w-32">
+                                                <h4 className="font-medium">{service.name}</h4>
+                                                
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div className="form-control">
                                                         <label className="label">
                                                             <span className="label-text">Quantity</span>
                                                         </label>
@@ -219,6 +263,32 @@ export default function NewServicePackage() {
                                                             value={service.quantity}
                                                             onChange={(e) => updateServiceQuantity(service.service_id, e.target.value)}
                                                             className="input input-bordered w-full"
+                                                        />
+                                                    </div>
+
+                                                    <div className="form-control">
+                                                        <label className="label">
+                                                            <span className="label-text">Custom Hours</span>
+                                                        </label>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            step="0.5"
+                                                            value={service.customizations?.hours || ''}
+                                                            onChange={(e) => updateServiceCustomization(service.service_id, 'hours', e.target.value)}
+                                                            className="input input-bordered w-full"
+                                                        />
+                                                    </div>
+
+                                                    <div className="form-control md:col-span-2">
+                                                        <label className="label">
+                                                            <span className="label-text">Custom Notes</span>
+                                                        </label>
+                                                        <textarea
+                                                            value={service.customizations?.notes || ''}
+                                                            onChange={(e) => updateServiceCustomization(service.service_id, 'notes', e.target.value)}
+                                                            className="textarea textarea-bordered"
+                                                            placeholder="Any special requirements or modifications"
                                                         />
                                                     </div>
                                                 </div>
@@ -232,16 +302,17 @@ export default function NewServicePackage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="form-control">
                                 <label className="label">
-                                    <span className="label-text">Base Price</span>
+                                    <span className="label-text">Price</span>
                                 </label>
                                 <input
                                     type="number"
-                                    name="basePrice"
-                                    value={formData.basePrice}
+                                    name="price"
+                                    value={formData.price}
                                     onChange={handleChange}
                                     className="input input-bordered"
                                     required
                                     min="0"
+                                    step="0.01"
                                 />
                             </div>
 
@@ -262,21 +333,6 @@ export default function NewServicePackage() {
                                     <option value="annual">Annual</option>
                                 </select>
                             </div>
-
-                            <div className="form-control">
-                                <label className="label">
-                                    <span className="label-text">Minimum Contract Months</span>
-                                </label>
-                                <input
-                                    type="number"
-                                    name="minimum_contract_months"
-                                    value={formData.minimum_contract_months}
-                                    onChange={handleChange}
-                                    className="input input-bordered"
-                                    required
-                                    min="1"
-                                />
-                            </div>
                         </div>
 
                         <div className="flex justify-end gap-4">
@@ -290,12 +346,12 @@ export default function NewServicePackage() {
                             <button
                                 type="submit"
                                 className="btn btn-primary"
-                                disabled={loading}
+                                disabled={saving}
                             >
-                                {loading ? (
+                                {saving ? (
                                     <span className="loading loading-spinner loading-sm"></span>
                                 ) : (
-                                    'Create Package'
+                                    'Save Changes'
                                 )}
                             </button>
                         </div>

@@ -26,7 +26,7 @@ export default async function handler(req, res) {
         // Populate service details in each package
         const packagesWithServices = packages.map(pkg => ({
           ...pkg,
-          services: Array.isArray(pkg.services) ? pkg.services.map(serviceRef => {
+          includedServices: Array.isArray(pkg.includedServices) ? pkg.includedServices.map(serviceRef => {
             const serviceDetails = availableServices.find(s => s.service_id === serviceRef.service_id)
             return {
               ...serviceRef,
@@ -44,20 +44,22 @@ export default async function handler(req, res) {
         const {
           name,
           description,
-          services,  // Array of { service_id, quantity, customizations }
-          price,
+          includedServices,  // Array of { service_id, quantity }
+          basePrice,
           billing_frequency,
-          tier
+          package_type,
+          tier,
+          minimum_contract_months
         } = req.body
 
-        if (!name || !services || !Array.isArray(services) || services.length === 0 || !price || !billing_frequency) {
+        if (!name || !includedServices || !Array.isArray(includedServices) || includedServices.length === 0 || !basePrice || !billing_frequency) {
           return res.status(400).json({ 
-            message: 'Name, services (as array), price, and billing frequency are required' 
+            message: 'Name, included services, base price, and billing frequency are required' 
           })
         }
 
         // Verify all services exist
-        const serviceIds = services.map(s => s.service_id)
+        const serviceIds = includedServices.map(s => s.service_id)
         const existingServices = await db.collection('agency_services')
           .find({ service_id: { $in: serviceIds }, active: true })
           .toArray()
@@ -70,16 +72,18 @@ export default async function handler(req, res) {
           package_id: `PKG${Date.now()}`,
           name,
           description,
-          tier: tier || 'standard',
-          services: services.map(service => ({
+          tier: tier || 'small',
+          package_type: package_type || 'retainer',
+          includedServices: includedServices.map(service => ({
             service_id: service.service_id,
-            quantity: parseInt(service.quantity) || 1,
-            customizations: service.customizations || {}
+            quantity: parseInt(service.quantity) || 1
           })),
-          price: parseFloat(price),
+          basePrice: parseInt(basePrice),
           billing_frequency,
+          minimum_contract_months: parseInt(minimum_contract_months) || 6,
           active: true,
-          created_at: new Date()
+          created_at: new Date(),
+          updated_at: new Date()
         }
 
         await db.collection('agency_service_packages').insertOne(newPackage)
