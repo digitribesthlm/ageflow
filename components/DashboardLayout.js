@@ -39,6 +39,8 @@ export default function DashboardLayout({ children }) {
   const menuItems = [
     { path: '/dashboard', label: 'Dashboard', icon: '📊' },
     { path: '/clients', label: 'Clients', icon: '👥' },
+    { path: '/services', label: 'Services', icon: '🛠️' },
+    { path: '/contracts', label: 'Contracts', icon: '📝' },
     { path: '/projects', label: 'Projects', icon: '📁' },
     { path: '/employees', label: 'Employees', icon: '👨‍💼' },
     { path: '/tasks/board', label: 'Task Board', icon: '📋' },
@@ -108,7 +110,7 @@ export default function DashboardLayout({ children }) {
             </div>
           </div>
         </div>
-
+        
         {/* Page Content */}
         <main className="flex-1 bg-base-200 p-4">
           <div className="container mx-auto">
