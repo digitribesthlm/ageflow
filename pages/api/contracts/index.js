@@ -2,6 +2,12 @@ import { connectToDatabase } from '../../../utils/mongodb'
 
 export default async function handler(req, res) {
   try {
+    console.log('Contracts API Request:', {
+      method: req.method,
+      query: req.query,
+      path: req.url
+    })
+
     // Check auth token from cookie
     const authToken = req.cookies['auth-token']
     if (!authToken) {
@@ -12,11 +18,50 @@ export default async function handler(req, res) {
 
     switch (req.method) {
       case 'GET':
+        // First get all contracts
         const contracts = await db.collection('agency_contracts')
           .find({ active: { $ne: false } })
           .sort({ created_at: -1 })
           .toArray()
-        return res.status(200).json(contracts)
+
+        // For contracts with packages, fetch the package details
+        const contractsWithDetails = await Promise.all(contracts.map(async contract => {
+          if (contract.packages) {
+            // Get package IDs from the contract's packages
+            const packageIds = contract.packages.map(p => p.package_id)
+            
+            // Fetch package details from service_packages collection
+            const packageDetails = await db.collection('agency_service_packages')
+              .find({ package_id: { $in: packageIds } })
+              .toArray()
+
+            // Replace each package with its full details
+            contract.packages = contract.packages.map(pkg => {
+              const details = packageDetails.find(p => p.package_id === pkg.package_id)
+              return {
+                ...pkg,
+                ...details,
+                quantity: pkg.quantity
+              }
+            })
+          }
+          // For old format contracts, fetch the single package
+          else if (contract.package_id) {
+            const packageDetail = await db.collection('agency_service_packages')
+              .findOne({ package_id: contract.package_id })
+            if (packageDetail) {
+              contract.packages = [{
+                package_id: contract.package_id,
+                ...packageDetail,
+                quantity: 1
+              }]
+            }
+          }
+          return contract
+        }))
+
+        console.log('Found contracts with details:', JSON.stringify(contractsWithDetails, null, 2))
+        return res.status(200).json(contractsWithDetails)
 
       case 'POST':
         const {

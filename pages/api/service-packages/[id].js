@@ -2,37 +2,55 @@ import { connectToDatabase } from '../../../utils/mongodb'
 
 export default async function handler(req, res) {
     try {
+        console.log('Service Packages API Request:', {
+            method: req.method,
+            query: req.query,
+            path: req.url
+        })
+
         const authToken = req.cookies['auth-token']
         if (!authToken) {
+            console.log('Auth token missing')
             return res.status(401).json({ message: 'Unauthorized' })
         }
 
         const { db } = await connectToDatabase()
         const { id } = req.query
 
+        console.log('Looking for package with ID:', id)
+
         if (!id) {
+            console.log('No package ID provided')
             return res.status(400).json({ message: 'Package ID is required' })
         }
 
         switch (req.method) {
             case 'GET':
+                console.log('Executing GET request for package:', id)
                 const servicePackage = await db.collection('agency_service_packages')
                     .findOne({ package_id: id })
 
+                console.log('Package found:', servicePackage)
+
                 if (!servicePackage) {
+                    console.log('No package found with ID:', id)
                     return res.status(404).json({ message: 'Service package not found' })
                 }
 
                 // Get service details
-                const serviceIds = servicePackage.includedServices.map(s => s.service_id)
+                const serviceIds = servicePackage.includedServices?.map(s => s.service_id) || []
+                console.log('Looking up services with IDs:', serviceIds)
+                
                 const serviceDetails = await db.collection('agency_services')
                     .find({ service_id: { $in: serviceIds }, active: true })
                     .toArray()
 
+                console.log('Found service details:', serviceDetails)
+
                 // Populate service details
                 const packageWithServices = {
                     ...servicePackage,
-                    includedServices: servicePackage.includedServices.map(serviceRef => {
+                    includedServices: servicePackage.includedServices?.map(serviceRef => {
                         const details = serviceDetails.find(s => s.service_id === serviceRef.service_id)
                         return {
                             ...serviceRef,
@@ -41,9 +59,10 @@ export default async function handler(req, res) {
                             description: details?.description,
                             deliverables: details?.deliverables
                         }
-                    })
+                    }) || []
                 }
 
+                console.log('Returning package with services:', packageWithServices)
                 return res.status(200).json(packageWithServices)
 
             case 'PUT':

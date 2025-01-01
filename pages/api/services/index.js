@@ -10,49 +10,60 @@ export default async function handler(req, res) {
 
     const { db } = await connectToDatabase()
 
-    switch (req.method) {
-      case 'GET':
+    if (req.method === 'GET') {
+      // Support fetching multiple services by IDs
+      if (req.query.ids) {
+        const serviceIds = req.query.ids.split(',')
         const services = await db.collection('agency_services')
-          .find({ active: { $ne: false } })
-          .sort({ name: 1 })
+          .find({ 
+            service_id: { $in: serviceIds },
+            active: { $ne: false }
+          })
           .toArray()
         return res.status(200).json(services)
+      }
 
-      case 'POST':
-        const {
-          name,
-          category,
-          service_type,
-          billing_type,
-          description,
-          deliverables
-        } = req.body
-
-        const newService = {
-          service_id: `SRV${Date.now()}`,
-          name,
-          category,
-          service_type,
-          billing_type,
-          description,
-          deliverables: deliverables.map(d => ({
-            name: d.name,
-            description: d.description,
-            estimatedHours: parseFloat(d.estimatedHours)
-          })),
-          active: true,
-          created_at: new Date()
-        }
-
-        await db.collection('agency_services').insertOne(newService)
-        return res.status(201).json(newService)
-
-      default:
-        res.setHeader('Allow', ['GET', 'POST'])
-        return res.status(405).json({ message: `Method ${req.method} Not Allowed` })
+      // Regular fetch all services
+      const services = await db.collection('agency_services')
+        .find({ active: { $ne: false } })
+        .sort({ created_at: -1 })
+        .toArray()
+      return res.status(200).json(services)
     }
+
+    if (req.method === 'POST') {
+      const {
+        name,
+        category,
+        service_type,
+        billing_type,
+        description,
+        deliverables
+      } = req.body
+
+      if (!name || !category || !service_type || !billing_type) {
+        return res.status(400).json({ message: 'Missing required fields' })
+      }
+
+      const newService = {
+        service_id: `SRV${Date.now()}`,
+        name,
+        category,
+        service_type,
+        billing_type,
+        description,
+        deliverables: deliverables || [],
+        active: true,
+        created_at: new Date()
+      }
+
+      await db.collection('agency_services').insertOne(newService)
+      return res.status(201).json(newService)
+    }
+
+    return res.status(405).json({ message: 'Method not allowed' })
   } catch (error) {
     console.error('Services API error:', error)
-    res.status(500).json({ message: 'Internal server error' })
+    return res.status(500).json({ message: 'Internal server error' })
   }
 } 
