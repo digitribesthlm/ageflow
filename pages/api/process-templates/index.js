@@ -2,6 +2,12 @@ import { connectToDatabase } from '../../../utils/mongodb'
 
 export default async function handler(req, res) {
     try {
+        console.log('Process Templates API Request:', {
+            method: req.method,
+            query: req.query,
+            path: req.url
+        })
+
         // Check auth token from cookie
         const authToken = req.cookies['auth-token']
         if (!authToken) {
@@ -13,6 +19,37 @@ export default async function handler(req, res) {
 
         if (req.method === 'GET') {
             const templates = await collection.find({ active: true }).toArray()
+            console.log('Found templates:', JSON.stringify(templates, null, 2))
+
+            // If templates don't have service_id, let's update them
+            if (templates.some(t => !t.service_id)) {
+                // Map categories to service IDs
+                const categoryToServiceMap = {
+                    'SEO': 'SRV001',
+                    'Content Marketing': 'SRV002',
+                    'Social Media': 'SRV003'
+                }
+
+                // Update templates with service_id based on category
+                const updatedTemplates = templates.map(template => {
+                    if (!template.service_id) {
+                        const service_id = categoryToServiceMap[template.category]
+                        if (service_id) {
+                            // Update in database
+                            collection.updateOne(
+                                { template_id: template.template_id },
+                                { $set: { service_id } }
+                            )
+                            return { ...template, service_id }
+                        }
+                    }
+                    return template
+                })
+
+                console.log('Updated templates:', JSON.stringify(updatedTemplates, null, 2))
+                return res.status(200).json(updatedTemplates)
+            }
+
             return res.status(200).json(templates)
         }
 

@@ -55,11 +55,22 @@ export default function NewProject() {
             ])
 
             console.log('Fetched contracts:', contractsData)
-            console.log('Fetched templates:', templatesData)
+            console.log('Fetched process templates:', JSON.stringify(templatesData, null, 2))
+
+            // Log available templates for each service
+            const templatesByService = templatesData.reduce((acc, template) => {
+                if (!acc[template.service_id]) {
+                    acc[template.service_id] = []
+                }
+                acc[template.service_id].push(template)
+                return acc
+            }, {})
+            console.log('Templates by service:', templatesByService)
 
             setContracts(contractsData)
             setProcessTemplates(templatesData)
         } catch (error) {
+            console.error('Error fetching initial data:', error)
             setError(error.message)
         } finally {
             setLoading(false)
