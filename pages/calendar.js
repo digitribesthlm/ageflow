@@ -10,6 +10,7 @@ export default function Calendar() {
   const [error, setError] = useState(null)
   const [selectedEmployee, setSelectedEmployee] = useState('all')
   const [selectedDate, setSelectedDate] = useState(new Date())
+  const [currentMonth, setCurrentMonth] = useState(new Date())
 
   useEffect(() => {
     fetchEmployees()
@@ -32,15 +33,7 @@ export default function Calendar() {
       const response = await fetch('/api/tasks')
       if (!response.ok) throw new Error('Failed to fetch tasks')
       const data = await response.json()
-      
-      // Sort tasks by due date
-      const sortedTasks = data.sort((a, b) => {
-        if (!a.due_date) return 1
-        if (!b.due_date) return -1
-        return new Date(a.due_date) - new Date(b.due_date)
-      })
-      
-      setTasks(sortedTasks)
+      setTasks(data)
     } catch (error) {
       console.error('Error fetching tasks:', error)
       setError(error.message)
@@ -70,25 +63,35 @@ export default function Calendar() {
     return task.assigned_to === selectedEmployee
   })
 
-  // Group tasks by date
-  const groupTasksByDate = () => {
-    const groups = {}
-    filteredTasks.forEach(task => {
-      if (!task.due_date) {
-        if (!groups['No Due Date']) {
-          groups['No Due Date'] = []
-        }
-        groups['No Due Date'].push(task)
-        return
-      }
+  const getDaysInMonth = (date) => {
+    const year = date.getFullYear()
+    const month = date.getMonth()
+    const daysInMonth = new Date(year, month + 1, 0).getDate()
+    const firstDayOfMonth = new Date(year, month, 1).getDay()
+    
+    const days = []
+    // Add empty days for padding at start of month
+    for (let i = 0; i < firstDayOfMonth; i++) {
+      days.push(null)
+    }
+    // Add all days in month
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(new Date(year, month, i))
+    }
+    // Add empty days for padding at end to complete the grid
+    while (days.length % 7 !== 0) {
+      days.push(null)
+    }
+    return days
+  }
 
-      const date = new Date(task.due_date).toLocaleDateString()
-      if (!groups[date]) {
-        groups[date] = []
-      }
-      groups[date].push(task)
+  const getTasksForDate = (date) => {
+    if (!date) return []
+    return filteredTasks.filter(task => {
+      if (!task.due_date) return false
+      const taskDate = new Date(task.due_date)
+      return taskDate.toDateString() === date.toDateString()
     })
-    return groups
   }
 
   const renderTaskCard = (task) => {
@@ -97,32 +100,30 @@ export default function Calendar() {
     return (
       <div 
         key={task.task_id} 
-        className="card bg-base-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+        className="p-2 bg-base-100 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer text-sm"
         onClick={() => window.location.href = `/tasks/${task.task_id}`}
       >
-        <div className="card-body p-4">
-          <div className="flex justify-between items-start">
-            <div>
-              <h3 className="font-medium">{task.name || task.title}</h3>
-              <p className="text-sm text-base-content/70 line-clamp-2">
-                {task.description || 'No description'}
-              </p>
-            </div>
-            <div className={`badge ${getStatusColor(task.status)}`}>
-              {task.status}
-            </div>
-          </div>
-          <div className="text-sm text-base-content/70 mt-2 space-y-1">
-            {task.project_name && (
-              <div>Project: {task.project_name}</div>
-            )}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <p className="font-medium truncate">{task.name || task.title}</p>
             {assignedEmployee && (
-              <div>Assigned to: {assignedEmployee.name}</div>
+              <p className="text-xs text-base-content/70 truncate">
+                {assignedEmployee.name}
+              </p>
             )}
+          </div>
+          <div className={`badge badge-sm ${getStatusColor(task.status)}`}>
+            {task.status}
           </div>
         </div>
       </div>
     )
+  }
+
+  const navigateMonth = (direction) => {
+    const newDate = new Date(currentMonth)
+    newDate.setMonth(newDate.getMonth() + direction)
+    setCurrentMonth(newDate)
   }
 
   const renderContent = () => {
@@ -142,32 +143,77 @@ export default function Calendar() {
       )
     }
 
-    const groupedTasks = groupTasksByDate()
-    const dates = Object.keys(groupedTasks).sort((a, b) => {
-      if (a === 'No Due Date') return 1
-      if (b === 'No Due Date') return -1
-      return new Date(a) - new Date(b)
-    })
+    const days = getDaysInMonth(currentMonth)
+    const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
     return (
-      <div className="space-y-8">
-        {dates.map(date => (
-          <div key={date} className="space-y-4">
-            <div className="sticky top-0 bg-base-100 z-10 py-2">
-              <h2 className="text-xl font-semibold">
-                {date === 'No Due Date' ? date : new Date(date).toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
-              </h2>
-            </div>
-            <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-              {groupedTasks[date].map(task => renderTaskCard(task))}
-            </div>
+      <div className="space-y-6">
+        {/* Month Navigation */}
+        <div className="flex justify-between items-center">
+          <button 
+            className="btn btn-ghost btn-sm"
+            onClick={() => navigateMonth(-1)}
+          >
+            ←
+          </button>
+          <h2 className="text-xl font-semibold">
+            {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          </h2>
+          <button 
+            className="btn btn-ghost btn-sm"
+            onClick={() => navigateMonth(1)}
+          >
+            →
+          </button>
+        </div>
+
+        {/* Calendar Grid */}
+        <div className="rounded-lg border border-base-300 overflow-hidden">
+          {/* Week days header */}
+          <div className="grid grid-cols-7 bg-base-200">
+            {weekDays.map(day => (
+              <div key={day} className="p-2 text-center font-medium">
+                {day}
+              </div>
+            ))}
           </div>
-        ))}
+
+          {/* Calendar days */}
+          <div className="grid grid-cols-7 divide-x divide-y divide-base-300">
+            {days.map((date, index) => {
+              const tasksForDay = date ? getTasksForDate(date) : []
+              const isToday = date && date.toDateString() === new Date().toDateString()
+              
+              return (
+                <div 
+                  key={index}
+                  className={`min-h-[120px] p-2 ${
+                    !date ? 'bg-base-200/50' : 
+                    isToday ? 'bg-primary/5' : 'bg-base-100'
+                  }`}
+                >
+                  {date && (
+                    <>
+                      <div className={`text-right mb-2 ${
+                        isToday ? 'font-bold text-primary' : ''
+                      }`}>
+                        {date.getDate()}
+                      </div>
+                      <div className="space-y-1">
+                        {tasksForDay.slice(0, 3).map(task => renderTaskCard(task))}
+                        {tasksForDay.length > 3 && (
+                          <div className="text-xs text-base-content/70 text-center">
+                            +{tasksForDay.length - 3} more
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
       </div>
     )
   }

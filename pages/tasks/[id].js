@@ -14,12 +14,22 @@ export default function TaskDetails() {
   const [error, setError] = useState(null)
   const [editingDescription, setEditingDescription] = useState(false)
   const [description, setDescription] = useState('')
+  const [editingDueDate, setEditingDueDate] = useState(false)
+  const [dueDate, setDueDate] = useState('')
 
   useEffect(() => {
     if (id) {
       fetchTaskDetails()
     }
   }, [id])
+
+  useEffect(() => {
+    if (task?.due_date) {
+      // Format the date to YYYY-MM-DD for the input
+      const formattedDate = new Date(task.due_date).toISOString().split('T')[0]
+      setDueDate(formattedDate)
+    }
+  }, [task])
 
   const fetchTaskDetails = async () => {
     try {
@@ -91,6 +101,27 @@ export default function TaskDetails() {
         await fetchTaskDetails()
       } else {
         throw new Error('Failed to update task description')
+      }
+    } catch (error) {
+      setError(error.message)
+    }
+  }
+
+  const updateTaskDueDate = async () => {
+    try {
+      const response = await fetch(`/api/tasks/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ due_date: dueDate }),
+      })
+
+      if (response.ok) {
+        setEditingDueDate(false)
+        await fetchTaskDetails()
+      } else {
+        throw new Error('Failed to update task due date')
       }
     } catch (error) {
       setError(error.message)
@@ -278,10 +309,37 @@ export default function TaskDetails() {
                 </div>
 
                 <div>
-                  <h4 className="font-medium mb-1">Due Date</h4>
-                  <p className="text-base-content/70">
-                    {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'Not set'}
-                  </p>
+                  <div className="flex justify-between items-center mb-1">
+                    <h4 className="font-medium">Due Date</h4>
+                    <button 
+                      className="btn btn-ghost btn-xs"
+                      onClick={() => setEditingDueDate(!editingDueDate)}
+                    >
+                      {editingDueDate ? 'Cancel' : 'Edit'}
+                    </button>
+                  </div>
+                  {editingDueDate ? (
+                    <div className="space-y-2">
+                      <input
+                        type="date"
+                        className="input input-bordered w-full"
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                      />
+                      <div className="flex justify-end">
+                        <button 
+                          className="btn btn-primary btn-sm"
+                          onClick={updateTaskDueDate}
+                        >
+                          Save Due Date
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-base-content/70">
+                      {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'Not set'}
+                    </p>
+                  )}
                 </div>
 
                 <div>
