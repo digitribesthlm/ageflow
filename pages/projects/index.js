@@ -21,15 +21,24 @@ export default function Projects() {
 
   const fetchProjects = async () => {
     try {
-      const response = await fetch('/api/projects')
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action: 'fetch' })
+      })
+
       if (response.ok) {
         const data = await response.json()
+        console.log('Fetched projects:', data)
         setProjects(data || [])
       } else {
         const errorData = await response.json()
         setError(errorData.message || 'Failed to fetch projects')
       }
     } catch (error) {
+      console.error('Error fetching projects:', error)
       setError('Error fetching projects: ' + error.message)
     } finally {
       setLoading(false)

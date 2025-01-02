@@ -1,5 +1,6 @@
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import Footer from './Footer';
 
 export default function DashboardLayout({ children }) {
@@ -95,7 +96,7 @@ export default function DashboardLayout({ children }) {
           <h1 className="text-xl font-bold mb-8">Agency Dashboard</h1>
           <nav className="space-y-2">
             {menuItems.map((item) => (
-              <a
+              <Link
                 key={item.path}
                 href={item.path}
                 className={`flex items-center space-x-2 p-2 rounded-lg hover:bg-base-300 ${
@@ -104,7 +105,7 @@ export default function DashboardLayout({ children }) {
               >
                 <span>{item.icon}</span>
                 <span>{item.label}</span>
-              </a>
+              </Link>
             ))}
           </nav>
         </div>

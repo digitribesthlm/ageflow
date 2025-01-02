@@ -1,131 +1,120 @@
 import { connectToDatabase } from '../../../utils/mongodb'
 
 export default async function handler(req, res) {
-  try {
-    console.log('Contracts API Request:', {
-      method: req.method,
-      query: req.query,
-      path: req.url
-    })
+    try {
+        const { db } = await connectToDatabase()
 
-    // Check auth token from cookie
-    const authToken = req.cookies['auth-token']
-    if (!authToken) {
-      return res.status(401).json({ message: 'Unauthorized' })
-    }
+        switch (req.method) {
+            case 'POST':
+                const { action, contract_id } = req.body
 
-    const { db } = await connectToDatabase()
+                if (action === 'fetch') {
+                    if (contract_id) {
+                        // Fetch specific contract
+                        const contract = await db.collection('agency_contracts')
+                            .findOne({ contract_id, active: true })
 
-    switch (req.method) {
-      case 'GET':
-        // First get all contracts
-        const contracts = await db.collection('agency_contracts')
-          .find({ active: { $ne: false } })
-          .sort({ created_at: -1 })
-          .toArray()
+                        if (!contract) {
+                            return res.status(404).json({ message: 'Contract not found' })
+                        }
 
-        // For contracts with packages, fetch the package details
-        const contractsWithDetails = await Promise.all(contracts.map(async contract => {
-          if (contract.packages) {
-            // Get package IDs from the contract's packages
-            const packageIds = contract.packages.map(p => p.package_id)
-            
-            // Fetch package details from service_packages collection
-            const packageDetails = await db.collection('agency_service_packages')
-              .find({ package_id: { $in: packageIds } })
-              .toArray()
+                        console.log('Found contract:', contract)
 
-            // Replace each package with its full details
-            contract.packages = contract.packages.map(pkg => {
-              const details = packageDetails.find(p => p.package_id === pkg.package_id)
-              return {
-                ...pkg,
-                ...details,
-                quantity: pkg.quantity
-              }
-            })
-          }
-          // For old format contracts, fetch the single package
-          else if (contract.package_id) {
-            const packageDetail = await db.collection('agency_service_packages')
-              .findOne({ package_id: contract.package_id })
-            if (packageDetail) {
-              contract.packages = [{
-                package_id: contract.package_id,
-                ...packageDetail,
-                quantity: 1
-              }]
-            }
-          }
-          return contract
-        }))
+                        // Fetch package details
+                        const packageIds = contract.packages.map(pkg => pkg.package_id)
+                        console.log('Looking up packages:', packageIds)
+                        
+                        const packageDetails = await db.collection('agency_service_packages')
+                            .find({ 
+                                package_id: { $in: packageIds },
+                                $or: [
+                                    { active: true },
+                                    { active: { $exists: false } },
+                                    { status: 'active' }
+                                ]
+                            })
+                            .toArray()
 
-        console.log('Found contracts with details:', JSON.stringify(contractsWithDetails, null, 2))
-        return res.status(200).json(contractsWithDetails)
+                        console.log('Found packages:', packageDetails)
 
-      case 'POST':
-        const {
-          client_id,
-          packages,  // Now an array of {package_id, quantity}
-          start_date,
-          end_date,
-          monthly_fee,
-          billing_frequency,
-          payment_terms,
-          contract_type
-        } = req.body
+                        // Get all service IDs from packages
+                        const serviceIds = packageDetails.flatMap(pkg => 
+                            pkg.includedServices?.map(service => service.service_id) || []
+                        )
+                        console.log('Looking up services:', serviceIds)
 
-        // Validate packages
-        if (!packages || packages.length === 0) {
-          return res.status(400).json({ message: 'At least one package is required' })
+                        // Fetch service details
+                        const services = await db.collection('agency_services')
+                            .find({ 
+                                service_id: { $in: serviceIds },
+                                $or: [
+                                    { active: true },
+                                    { active: { $exists: false } },
+                                    { status: 'active' }
+                                ]
+                            })
+                            .toArray()
+
+                        console.log('Found services:', services)
+
+                        // Enhance contract with full package and service details
+                        contract.packages = contract.packages.map(contractPkg => {
+                            const fullPackage = packageDetails.find(p => p.package_id === contractPkg.package_id)
+                            console.log('Processing package:', contractPkg.package_id, 'Found details:', fullPackage)
+                            
+                            const enhancedPackage = {
+                                ...contractPkg,
+                                name: fullPackage?.name,
+                                description: fullPackage?.description,
+                                includedServices: fullPackage?.includedServices?.map(service => {
+                                    const fullService = services.find(s => s.service_id === service.service_id)
+                                    if (!fullService) {
+                                        console.log('Service not found:', service.service_id)
+                                        return null
+                                    }
+                                    console.log('Processing service:', service.service_id, 'Found details:', fullService)
+                                    return {
+                                        ...service,
+                                        name: fullService.name,
+                                        description: fullService.description,
+                                        process_template_id: fullService.process_template_id,
+                                        selected_steps: fullService.selected_steps || [],
+                                        category: fullService.category,
+                                        deliverables: fullService.deliverables || [],
+                                        estimated_hours: fullService.estimated_hours,
+                                        minimum_hours: fullService.minimum_hours,
+                                        included_hours: fullService.included_hours,
+                                        service_type: fullService.service_type,
+                                        billing_type: fullService.billing_type,
+                                        base_price: fullService.base_price
+                                    }
+                                }).filter(Boolean) || []
+                            }
+                            console.log('Enhanced package:', enhancedPackage)
+                            return enhancedPackage
+                        })
+
+                        console.log('Returning enhanced contract:', JSON.stringify(contract, null, 2))
+                        return res.status(200).json(contract)
+                    } else {
+                        // Fetch all contracts
+                        const contracts = await db.collection('agency_contracts')
+                            .find({ active: true })
+                            .sort({ created_at: -1 })
+                            .toArray()
+                        
+                        return res.status(200).json(contracts)
+                    }
+                }
+
+                return res.status(400).json({ message: 'Invalid action' })
+
+            default:
+                res.setHeader('Allow', ['POST'])
+                return res.status(405).json({ message: `Method ${req.method} Not Allowed` })
         }
-
-        // Get package details from database
-        const packageIds = packages.map(p => p.package_id)
-        const packageDetails = await db.collection('agency_service_packages')
-          .find({ package_id: { $in: packageIds }, active: true })
-          .toArray()
-
-        // Create package entries with quantities and details
-        const contractPackages = packages.map(pkg => {
-          const details = packageDetails.find(p => p.package_id === pkg.package_id)
-          return {
-            package_id: pkg.package_id,
-            name: details.name,
-            quantity: pkg.quantity,
-            price: details.price,
-            services: details.services,
-            billing_frequency: details.billing_frequency
-          }
-        })
-
-        const newContract = {
-          contract_id: `CNT${Date.now()}`,
-          client_id,
-          packages: contractPackages,
-          contract_type,
-          status: 'active',
-          start_date: new Date(start_date),
-          end_date: contract_type === 'one-time' ? new Date(end_date) : null,
-          monthly_fee: parseFloat(monthly_fee),
-          billing: {
-            frequency: billing_frequency,
-            next_billing_date: new Date(start_date),
-            payment_terms: payment_terms
-          },
-          active: true,
-          created_at: new Date()
-        }
-
-        await db.collection('agency_contracts').insertOne(newContract)
-        return res.status(201).json(newContract)
-
-      default:
-        res.setHeader('Allow', ['GET', 'POST'])
-        return res.status(405).json({ message: `Method ${req.method} Not Allowed` })
+    } catch (error) {
+        console.error('Contracts API error:', error)
+        return res.status(500).json({ message: 'Internal server error' })
     }
-  } catch (error) {
-    console.error('Contracts API error:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
 } 

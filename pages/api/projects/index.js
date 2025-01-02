@@ -6,6 +6,20 @@ export default async function handler(req, res) {
 
         switch (req.method) {
             case 'POST':
+                const { action } = req.body
+
+                // Handle fetch action
+                if (action === 'fetch') {
+                    const projects = await db.collection('agency_projects')
+                        .find({ active: true })
+                        .sort({ created_at: -1 })
+                        .toArray()
+                    
+                    console.log('Fetched projects:', projects.length)
+                    return res.status(200).json(projects)
+                }
+
+                // Handle create action
                 const { 
                     name, 
                     client_id, 

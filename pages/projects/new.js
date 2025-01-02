@@ -162,13 +162,25 @@ export default function NewProject() {
             return
         }
         fetchInitialData()
+        fetchEmployees()
     }, [])
 
     const fetchInitialData = async () => {
         try {
+            setLoading(true)
+            setError(null)
+
             const [contractsRes, templatesRes] = await Promise.all([
-                fetch('/api/contracts'),
-                fetch('/api/process-templates')
+                fetch('/api/contracts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'fetch' })
+                }),
+                fetch('/api/process-templates', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'fetch' })
+                })
             ])
 
             if (!contractsRes.ok || !templatesRes.ok) {
@@ -183,21 +195,11 @@ export default function NewProject() {
             console.log('Fetched contracts:', contractsData)
             console.log('Fetched process templates:', JSON.stringify(templatesData, null, 2))
 
-            // Log available templates for each service
-            const templatesByService = templatesData.reduce((acc, template) => {
-                if (!acc[template.service_id]) {
-                    acc[template.service_id] = []
-                }
-                acc[template.service_id].push(template)
-                return acc
-            }, {})
-            console.log('Templates by service:', templatesByService)
-
             setContracts(contractsData)
             setProcessTemplates(templatesData)
         } catch (error) {
             console.error('Error fetching initial data:', error)
-            setError(error.message)
+            setError('Failed to load initial data')
         } finally {
             setLoading(false)
         }
@@ -220,7 +222,12 @@ export default function NewProject() {
             setError(null)
             console.log('Fetching contract details for:', contractId)
             
-            const response = await fetch(`/api/contracts/${contractId}`)
+            const response = await fetch('/api/contracts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'fetch', contract_id: contractId })
+            })
+
             if (!response.ok) {
                 const errorData = await response.json()
                 throw new Error(errorData.message || 'Error loading contract details')
@@ -232,37 +239,52 @@ export default function NewProject() {
             // Store the selected contract
             setSelectedContract(contract)
 
+            // Debug contract packages
+            console.log('Contract packages:', contract.packages)
+
             // Get all services from the contract's packages with their process templates
             const servicesFromPackages = contract.packages
                 ?.flatMap(pkg => {
-                    return (pkg.includedServices || []).map(service => ({
-                        service_id: service.service_id,
-                        name: service.name,
-                        description: service.description,
-                        process_template_id: service.process_template_id,
-                        selected_steps: service.selected_steps || [],
-                        package_name: pkg.name,
-                        package_id: pkg.package_id,
-                        deliverables: service.deliverables || [],
-                        estimated_hours: service.estimated_hours,
-                        minimum_hours: service.minimum_hours,
-                        included_hours: service.included_hours,
-                        service_type: service.service_type,
-                        billing_type: service.billing_type,
-                        base_price: service.base_price,
-                        category: service.category
-                    }))
+                    console.log('Processing package:', pkg.name, 'Included services:', pkg.includedServices)
+                    return (pkg.includedServices || []).map(service => {
+                        console.log('Processing service:', service)
+                        return {
+                            service_id: service.service_id,
+                            name: service.name,
+                            description: service.description,
+                            process_template_id: service.process_template_id,
+                            selected_steps: service.selected_steps || [],
+                            package_name: pkg.name,
+                            package_id: pkg.package_id,
+                            deliverables: service.deliverables || [],
+                            estimated_hours: service.estimated_hours,
+                            minimum_hours: service.minimum_hours,
+                            included_hours: service.included_hours,
+                            service_type: service.service_type,
+                            billing_type: service.billing_type,
+                            base_price: service.base_price,
+                            category: service.category
+                        }
+                    })
                 }) || []
 
             console.log('Services from packages:', JSON.stringify(servicesFromPackages, null, 2))
 
+            if (servicesFromPackages.length === 0) {
+                console.warn('No services found in the contract packages')
+            }
+
             // Update form data with enhanced service information
-            setFormData(prev => ({
-                ...prev,
-                contract_id: contractId,
-                client_id: contract.client_id,
-                services: servicesFromPackages
-            }))
+            setFormData(prev => {
+                const newFormData = {
+                    ...prev,
+                    contract_id: contractId,
+                    client_id: contract.client_id,
+                    services: servicesFromPackages
+                }
+                console.log('Updated form data:', newFormData)
+                return newFormData
+            })
 
         } catch (error) {
             console.error('Error selecting contract:', error)
@@ -295,109 +317,62 @@ export default function NewProject() {
         setSaving(true)
         setError(null)
 
-        try {
-            // Create phases and tasks from selected process templates
-            const phases = []
-            const tasks = []
-            
-            formData.services.forEach(service => {
-                service.process_templates.forEach(templateData => {
-                    const template = processTemplates.find(t => t.template_id === templateData.template_id)
-                    if (template) {
-                        template.steps.forEach(step => {
-                            const selectedTasksInStep = templateData.selected_steps.filter(
-                                taskKey => taskKey.startsWith(step.step_id)
-                            )
-                            
-                            if (selectedTasksInStep.length > 0) {
-                                // Create phase
-                                const phase = {
-                                    name: step.name,
-                                    step_id: step.step_id,
-                                    service_id: service.service_id,
-                                    template_id: template.template_id,
-                                    status: 'pending',
-                                    order: step.order,
-                                    estimated_hours: 0,
-                                    tasks: []
-                                }
-                                
-                                // Process selected tasks
-                                step.tasks.forEach(taskTemplate => {
-                                    const mainTaskKey = `${step.step_id}:${taskTemplate.task_template_id}`
-                                    if (templateData.selected_steps.includes(mainTaskKey)) {
-                                        const taskId = `TSK_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-                                        
-                                        // Create main task
-                                        const task = {
-                                            task_id: taskId,
-                                            name: taskTemplate.name,
-                                            description: taskTemplate.description,
-                                            service_id: service.service_id,
-                                            project_id: '', // Will be set after project creation
-                                            phase_id: phase.step_id,
-                                            template_id: template.template_id,
-                                            task_template_id: taskTemplate.task_template_id,
-                                            estimated_hours: taskTemplate.estimated_hours,
-                                            required_tools: taskTemplate.required_tools || [],
-                                            deliverables: taskTemplate.deliverables || [],
-                                            instruction_doc: taskTemplate.instruction_doc,
-                                            status: 'pending',
-                                            created_at: new Date(),
-                                            updated_at: new Date()
-                                        }
-                                        
-                                        tasks.push(task)
-                                        phase.tasks.push(taskId)
-                                        phase.estimated_hours += taskTemplate.estimated_hours
-                                        
-                                        // Process sub-tasks if any
-                                        taskTemplate.sub_tasks?.forEach(subTaskTemplate => {
-                                            const subTaskKey = `${step.step_id}:${taskTemplate.task_template_id}:${subTaskTemplate.sub_task_template_id}`
-                                            if (templateData.selected_steps.includes(subTaskKey)) {
-                                                const subTaskId = `TSK_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-                                                
-                                                const subTask = {
-                                                    task_id: subTaskId,
-                                                    name: subTaskTemplate.name,
-                                                    description: subTaskTemplate.description,
-                                                    service_id: service.service_id,
-                                                    project_id: '', // Will be set after project creation
-                                                    phase_id: phase.step_id,
-                                                    parent_task_id: taskId,
-                                                    template_id: template.template_id,
-                                                    task_template_id: subTaskTemplate.sub_task_template_id,
-                                                    estimated_hours: subTaskTemplate.estimated_hours,
-                                                    instruction_doc: subTaskTemplate.instruction_doc,
-                                                    status: 'pending',
-                                                    created_at: new Date(),
-                                                    updated_at: new Date()
-                                                }
-                                                
-                                                tasks.push(subTask)
-                                                phase.tasks.push(subTaskId)
-                                                phase.estimated_hours += subTaskTemplate.estimated_hours
-                                            }
-                                        })
-                                    }
-                                })
-                                
-                                phases.push(phase)
-                            }
-                        })
-                    }
-                })
-            })
+        // Validate required fields
+        if (!formData.name) {
+            setError('Project name is required')
+            setSaving(false)
+            return
+        }
 
+        if (!formData.start_date || !formData.end_date) {
+            setError('Start date and end date are required')
+            setSaving(false)
+            return
+        }
+
+        if (!formData.contract_id || !formData.client_id) {
+            setError('Please select a contract')
+            setSaving(false)
+            return
+        }
+
+        if (!formData.services || formData.services.length === 0) {
+            setError('No services selected')
+            setSaving(false)
+            return
+        }
+
+        try {
             const projectData = {
-                ...formData,
-                phases: phases.sort((a, b) => a.order - b.order),
-                created_at: new Date(),
-                updated_at: new Date(),
+                name: formData.name,
+                description: formData.description || '',
+                client_id: formData.client_id,
+                contract_id: formData.contract_id,
+                start_date: formData.start_date,
+                end_date: formData.end_date,
+                services: formData.services.map(service => ({
+                    service_id: service.service_id,
+                    name: service.name,
+                    category: service.category,
+                    process_template_id: service.process_template_id,
+                    package_id: service.package_id,
+                    package_name: service.package_name,
+                    deliverables: (service.deliverables || []).map((phase, phaseIndex) => ({
+                        phase_id: `PHASE_${phaseIndex}`,
+                        phase: phase.phase,
+                        tasks: (phase.tasks || []).map((task, taskIndex) => ({
+                            ...task,
+                            assigned_to: selectedEmployees[`task_${service.service_id}_${phaseIndex}_${taskIndex}`]
+                        })),
+                        assigned_to: selectedEmployees[`phase_${service.service_id}_${phaseIndex}`]
+                    }))
+                })),
                 employeeAssignments: selectedEmployees
             }
 
-            // Create project first
+            console.log('Submitting project data:', JSON.stringify(projectData, null, 2))
+
+            // Create project
             const projectResponse = await fetch('/api/projects', {
                 method: 'POST',
                 headers: {
@@ -411,42 +386,26 @@ export default function NewProject() {
                 throw new Error(error.message || 'Failed to create project')
             }
 
-            const project = await projectResponse.json()
-
-            // Create tasks with project ID
-            const tasksWithProject = tasks.map(task => ({
-                ...task,
-                project_id: project.project_id
-            }))
-
-            const tasksResponse = await fetch('/api/tasks/batch', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(tasksWithProject),
-            })
-
-            if (!tasksResponse.ok) {
-                const error = await tasksResponse.json()
-                throw new Error(error.message || 'Failed to create tasks')
-            }
+            const result = await projectResponse.json()
+            console.log('Project created:', result)
 
             router.push('/projects')
         } catch (error) {
+            console.error('Error creating project:', error)
             setError(error.message)
         } finally {
             setSaving(false)
         }
     }
 
-    useEffect(() => {
-        fetchEmployees()
-    }, [])
-
     const fetchEmployees = async () => {
         try {
-            const response = await fetch('/api/employees')
+            const response = await fetch('/api/employees', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'fetch' })
+            })
+            
             if (response.ok) {
                 const data = await response.json()
                 console.log('Fetched employees:', data)
