@@ -138,6 +138,8 @@ export default function NewProject() {
     const [contracts, setContracts] = useState([])
     const [processTemplates, setProcessTemplates] = useState([])
     const [selectedContract, setSelectedContract] = useState(null)
+    const [employees, setEmployees] = useState([])
+    const [selectedEmployees, setSelectedEmployees] = useState({})
     
     // Form data
     const [formData, setFormData] = useState({
@@ -281,6 +283,13 @@ export default function NewProject() {
         }))
     }
 
+    const handleEmployeeAssignment = (taskKey, employeeId) => {
+        setSelectedEmployees(prev => ({
+            ...prev,
+            [taskKey]: employeeId
+        }))
+    }
+
     const handleSubmit = async (e) => {
         e.preventDefault()
         setSaving(true)
@@ -384,7 +393,8 @@ export default function NewProject() {
                 ...formData,
                 phases: phases.sort((a, b) => a.order - b.order),
                 created_at: new Date(),
-                updated_at: new Date()
+                updated_at: new Date(),
+                employeeAssignments: selectedEmployees
             }
 
             // Create project first
@@ -427,6 +437,25 @@ export default function NewProject() {
             setError(error.message)
         } finally {
             setSaving(false)
+        }
+    }
+
+    useEffect(() => {
+        fetchEmployees()
+    }, [])
+
+    const fetchEmployees = async () => {
+        try {
+            const response = await fetch('/api/employees')
+            if (response.ok) {
+                const data = await response.json()
+                console.log('Fetched employees:', data)
+                setEmployees(data)
+            } else {
+                console.error('Failed to fetch employees')
+            }
+        } catch (error) {
+            console.error('Error fetching employees:', error)
         }
     }
 
@@ -572,45 +601,71 @@ export default function NewProject() {
                                                 {/* Display Deliverables */}
                                                 {service.deliverables && service.deliverables.length > 0 && (
                                                     <div className="mb-4">
-                                                        <h4 className="font-medium mb-2">Deliverables & Tasks</h4>
+                                                        <h4 className="font-medium mb-2">Phase & Task Assignment</h4>
                                                         {service.deliverables.map((phase, phaseIndex) => (
                                                             <div key={phaseIndex} className="card bg-base-100 p-4 mb-2">
-                                                                <h5 className="font-medium mb-2 flex items-center gap-2">
-                                                                    {phase.phase}
+                                                                <h5 className="font-medium mb-2 flex items-center justify-between">
+                                                                    <span>{phase.phase}</span>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-sm">Phase Lead:</span>
+                                                                        <select 
+                                                                            className="select select-bordered select-sm"
+                                                                            value={selectedEmployees[`phase_${service.service_id}_${phaseIndex}`] || ''}
+                                                                            onChange={(e) => handleEmployeeAssignment(`phase_${service.service_id}_${phaseIndex}`, e.target.value)}
+                                                                        >
+                                                                            <option value="">Select Lead</option>
+                                                                            {employees
+                                                                                .filter(emp => {
+                                                                                    console.log('Filtering employee:', emp.name, 'Skills:', emp.skills, 'Service category:', service.category)
+                                                                                    return emp.skills?.some(skill => 
+                                                                                        skill.toLowerCase().includes(service.category.toLowerCase()) ||
+                                                                                        service.category.toLowerCase().includes(skill.toLowerCase())
+                                                                                    ) || emp.role.toLowerCase().includes(service.category.toLowerCase())
+                                                                                })
+                                                                                .map(emp => (
+                                                                                    <option key={emp.employee_id} value={emp.employee_id}>
+                                                                                        {emp.name} ({emp.role})
+                                                                                    </option>
+                                                                                ))
+                                                                            }
+                                                                        </select>
+                                                                    </div>
                                                                 </h5>
                                                                 <div className="space-y-2 ml-4">
                                                                     {phase.tasks.map((task, taskIndex) => (
                                                                         <div key={taskIndex}>
-                                                                            <div className="flex items-center gap-2">
-                                                                                <span className="font-medium">{task.name}</span>
-                                                                                {task.estimated_hours && (
-                                                                                    <span className="text-sm opacity-70">
-                                                                                        ({task.estimated_hours}h)
-                                                                                    </span>
-                                                                                )}
-                                                                            </div>
-                                                                            {task.description && (
-                                                                                <p className="text-sm opacity-70 ml-4">{task.description}</p>
-                                                                            )}
-                                                                            {task.sub_tasks && task.sub_tasks.length > 0 && (
-                                                                                <div className="ml-6 space-y-1 mt-1">
-                                                                                    {task.sub_tasks.map((subTask, subIndex) => (
-                                                                                        <div key={subIndex}>
-                                                                                            <div className="flex items-center gap-2">
-                                                                                                <span className="text-sm">{subTask.name}</span>
-                                                                                                {subTask.estimated_hours && (
-                                                                                                    <span className="text-sm opacity-70">
-                                                                                                        ({subTask.estimated_hours}h)
-                                                                                                    </span>
-                                                                                                )}
-                                                                                            </div>
-                                                                                            {subTask.description && (
-                                                                                                <p className="text-sm opacity-70 ml-4">{subTask.description}</p>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    ))}
+                                                                            <div className="flex items-center justify-between gap-2">
+                                                                                <div>
+                                                                                    <span className="font-medium">{task.name}</span>
+                                                                                    {task.estimated_hours && (
+                                                                                        <span className="text-sm opacity-70 ml-2">
+                                                                                            ({task.estimated_hours}h)
+                                                                                        </span>
+                                                                                    )}
                                                                                 </div>
-                                                                            )}
+                                                                                <select 
+                                                                                    className="select select-bordered select-sm"
+                                                                                    value={selectedEmployees[`task_${service.service_id}_${phaseIndex}_${taskIndex}`] || ''}
+                                                                                    onChange={(e) => handleEmployeeAssignment(`task_${service.service_id}_${phaseIndex}_${taskIndex}`, e.target.value)}
+                                                                                >
+                                                                                    <option value="">Assign To</option>
+                                                                                    {employees
+                                                                                        .filter(emp => {
+                                                                                            console.log('Filtering employee for task:', emp.name, 'Skills:', emp.skills, 'Service category:', service.category)
+                                                                                            return emp.skills?.some(skill => 
+                                                                                                skill.toLowerCase().includes(service.category.toLowerCase()) ||
+                                                                                                service.category.toLowerCase().includes(skill.toLowerCase())
+                                                                                            ) || emp.role.toLowerCase().includes(service.category.toLowerCase())
+                                                                                        })
+                                                                                        .map(emp => (
+                                                                                            <option key={emp.employee_id} value={emp.employee_id}>
+                                                                                                {emp.name} ({emp.role}) - {emp.availability_hours}h available
+                                                                                            </option>
+                                                                                        ))
+                                                                                    }
+                                                                                </select>
+                                                                            </div>
+                                                                            {/* ... existing task details ... */}
                                                                         </div>
                                                                     ))}
                                                                 </div>
