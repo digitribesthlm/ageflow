@@ -19,7 +19,7 @@ export default async function handler(req, res) {
 
         if (req.method === 'GET') {
             const templates = await collection.find({ active: true }).toArray()
-            console.log('Found templates:', JSON.stringify(templates, null, 2))
+            console.log('Process templates from DB:', JSON.stringify(templates, null, 2))
 
             // If templates don't have service_id, let's update them
             if (templates.some(t => !t.service_id)) {

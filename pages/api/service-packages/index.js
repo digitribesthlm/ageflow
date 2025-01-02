@@ -58,14 +58,26 @@ export default async function handler(req, res) {
           })
         }
 
-        // Verify all services exist
+        // Verify all services exist and are active
         const serviceIds = includedServices.map(s => s.service_id)
         const existingServices = await db.collection('agency_services')
-          .find({ service_id: { $in: serviceIds }, active: true })
-          .toArray()
+            .find({ 
+                service_id: { $in: serviceIds }, 
+                active: { $ne: false }  // Check that services are active
+            })
+            .toArray()
+
+        console.log('Found services:', existingServices)
+        console.log('Looking for service IDs:', serviceIds)
 
         if (existingServices.length !== serviceIds.length) {
-          return res.status(400).json({ message: 'One or more services do not exist' })
+            const foundIds = existingServices.map(s => s.service_id)
+            const missingIds = serviceIds.filter(id => !foundIds.includes(id))
+            console.log('Missing or inactive services:', missingIds)
+            return res.status(400).json({ 
+                message: 'One or more services do not exist or are inactive',
+                missingServices: missingIds
+            })
         }
 
         const newPackage = {

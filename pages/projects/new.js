@@ -182,113 +182,64 @@ export default function NewProject() {
     }
 
     const handleContractSelect = async (contractId) => {
-        try {
-            const contract = contracts.find(c => c.contract_id === contractId)
-            if (!contract) {
-                console.error('Contract not found:', contractId)
-                return
-            }
-
-            console.log('Selected contract:', JSON.stringify(contract, null, 2))
-            setSelectedContract(contract)
-            
-            let services = []
-            
-            // Handle old format (single package_id)
-            if (contract.package_id) {
-                console.log('Fetching package details for legacy contract:', contract.package_id)
-                const packageResponse = await fetch(`/api/service-packages/${contract.package_id}`)
-                
-                if (!packageResponse.ok) {
-                    const errorText = await packageResponse.text()
-                    console.error('Package fetch failed:', {
-                        status: packageResponse.status,
-                        statusText: packageResponse.statusText,
-                        error: errorText,
-                        packageId: contract.package_id
-                    })
-                    throw new Error(`Failed to fetch package details: ${packageResponse.status}`)
-                }
-                
-                const packageData = await packageResponse.json()
-                console.log('Package details:', JSON.stringify(packageData, null, 2))
-                
-                if (!packageData.includedServices || !Array.isArray(packageData.includedServices)) {
-                    console.error('Invalid package data - missing or invalid includedServices array:', packageData)
-                    throw new Error('Package data is missing services information')
-                }
-                
-                // Fetch full service details for each included service
-                const serviceIds = packageData.includedServices.map(s => s.service_id)
-                const servicesResponse = await fetch(`/api/services?ids=${serviceIds.join(',')}`)
-                if (!servicesResponse.ok) {
-                    throw new Error('Failed to fetch service details')
-                }
-                const servicesData = await servicesResponse.json()
-                
-                services = packageData.includedServices.map(included => {
-                    const serviceDetails = servicesData.find(s => s.service_id === included.service_id)
-                    return {
-                        service_id: included.service_id,
-                        package_id: contract.package_id,
-                        process_templates: [],
-                        name: serviceDetails?.name || 'Unknown Service',
-                        quantity: included.quantity || 1
-                    }
-                })
-            }
-            // Handle new format (packages array)
-            else if (contract.packages && contract.packages.length > 0) {
-                console.log('Contract packages:', JSON.stringify(contract.packages, null, 2))
-                services = contract.packages.flatMap(pkg => {
-                    if (!pkg.includedServices || !Array.isArray(pkg.includedServices)) {
-                        console.error('Package missing includedServices array:', pkg)
-                        return []
-                    }
-                    return pkg.includedServices.map(included => ({
-                        service_id: included.service_id,
-                        package_id: pkg.package_id,
-                        process_templates: [],
-                        name: included.name || 'Unknown Service',
-                        quantity: included.quantity || 1
-                    }))
-                })
-            } else {
-                throw new Error('Contract has no package information')
-            }
-            
-            console.log('Extracted services:', JSON.stringify(services, null, 2))
-            console.log('Available process templates:', JSON.stringify(processTemplates, null, 2))
-            
-            // Log matching templates for each service
-            services.forEach(service => {
-                const matchingTemplates = processTemplates.filter(t => t.service_id === service.service_id)
-                console.log(`Matching templates for service ${service.service_id}:`, matchingTemplates)
-            })
-            
-            // Convert dates - handle both MongoDB format and regular dates
-            const startDate = contract.start_date?.$date 
-                ? new Date(parseInt(contract.start_date.$date.$numberLong)).toISOString().split('T')[0]
-                : new Date(contract.start_date).toISOString().split('T')[0]
-            
-            const endDate = contract.end_date?.$date 
-                ? new Date(parseInt(contract.end_date.$date.$numberLong)).toISOString().split('T')[0]
-                : contract.end_date ? new Date(contract.end_date).toISOString().split('T')[0] : ''
-            
-            // Update form with contract data
+        if (!contractId) {
+            setSelectedContract(null)
             setFormData(prev => ({
                 ...prev,
-                contract_id: contract.contract_id,
+                contract_id: '',
+                client_id: '',
+                services: []
+            }))
+            return
+        }
+
+        try {
+            setLoading(true)
+            setError(null)
+            console.log('Fetching contract details for:', contractId)
+            
+            const response = await fetch(`/api/contracts/${contractId}`)
+            if (!response.ok) {
+                const errorData = await response.json()
+                throw new Error(errorData.message || 'Error loading contract details')
+            }
+            
+            const contract = await response.json()
+            console.log('Contract details:', contract)
+
+            // Store the selected contract
+            setSelectedContract(contract)
+
+            // Get all services from the contract's packages
+            const servicesFromPackages = contract.packages
+                ?.flatMap(pkg => pkg.includedServices || [])
+                .map(service => ({
+                    service_id: service.service_id,
+                    name: service.name,
+                    process_template_id: service.process_template_id,
+                    selected_steps: service.selected_steps || []
+                })) || []
+
+            console.log('Services from packages:', servicesFromPackages)
+
+            // Update form data
+            setFormData(prev => ({
+                ...prev,
+                contract_id: contractId,
                 client_id: contract.client_id,
                 name: `${contract.client_id} Project - ${new Date().toLocaleDateString()}`,
-                services,
-                total_budget: contract.monthly_fee?.$numberInt || contract.monthly_fee || 0,
-                start_date: startDate,
-                end_date: endDate
+                services: servicesFromPackages,
+                total_budget: contract.monthly_fee || 0,
+                start_date: new Date().toISOString().split('T')[0],
+                end_date: ''
             }))
+
         } catch (error) {
-            console.error('Error loading contract details:', error)
-            setError(error.message || 'Error loading contract details')
+            console.error('Error in handleContractSelect:', error)
+            setError(error.message)
+            setSelectedContract(null)
+        } finally {
+            setLoading(false)
         }
     }
 
@@ -495,11 +446,16 @@ export default function NewProject() {
                                 required
                             >
                                 <option value="">Select a contract</option>
-                                {contracts.map(contract => (
-                                    <option key={contract.contract_id} value={contract.contract_id}>
-                                        {contract.client_id} - Package {contract.package_id} (${contract.monthly_fee}/month)
-                                    </option>
-                                ))}
+                                {contracts.map(contract => {
+                                    const totalServices = contract.packages
+                                        ?.reduce((sum, pkg) => sum + (pkg.includedServices?.length || 0), 0) || 0
+                                    return (
+                                        <option key={contract.contract_id} value={contract.contract_id}>
+                                            {contract.client_id} - {totalServices} Services 
+                                            {contract.monthly_fee ? ` ($${contract.monthly_fee}/month)` : ''}
+                                        </option>
+                                    )
+                                })}
                             </select>
                         </div>
 

@@ -70,8 +70,15 @@ export default function NewServicePackage() {
             if (response.ok) {
                 router.push('/service-packages')
             } else {
-                const error = await response.json()
-                throw new Error(error.message || 'Failed to create service package')
+                const errorData = await response.json()
+                if (errorData.missingServices) {
+                    const missingServiceNames = errorData.missingServices.map(id => {
+                        const service = services.find(s => s.service_id === id)
+                        return service ? service.name : id
+                    }).join(', ')
+                    throw new Error(`The following services are not available: ${missingServiceNames}`)
+                }
+                throw new Error(errorData.message || 'Failed to create service package')
             }
         } catch (error) {
             setError(error.message)

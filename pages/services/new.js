@@ -15,12 +15,14 @@ export default function NewService() {
         service_type: '',
         billing_type: '',
         description: '',
-        deliverables: '',
-        process_template_id: '', // Added process template field
+        process_template_id: '',
         base_price: '',
         minimum_hours: '',
-        included_hours: ''
+        included_hours: '',
+        additional_deliverables: ''
     })
+    const [selectedTemplate, setSelectedTemplate] = useState(null)
+    const [selectedSteps, setSelectedSteps] = useState([])
 
     useEffect(() => {
         fetchProcessTemplates()
@@ -31,6 +33,7 @@ export default function NewService() {
             const response = await fetch('/api/process-templates')
             if (!response.ok) throw new Error('Failed to fetch process templates')
             const data = await response.json()
+            console.log('Fetched process templates:', data) // Debug log
             setProcessTemplates(data)
         } catch (error) {
             console.error('Error fetching process templates:', error)
@@ -46,6 +49,34 @@ export default function NewService() {
         }))
     }
 
+    const handleTemplateChange = (e) => {
+        const templateId = e.target.value
+        console.log('Selected template ID:', templateId) // Debug log
+        
+        setFormData(prev => ({
+            ...prev,
+            process_template_id: templateId
+        }))
+        
+        const template = processTemplates.find(t => t.template_id === templateId)
+        console.log('Found template:', template) // Debug log
+        console.log('All templates:', processTemplates) // Debug log
+        
+        setSelectedTemplate(template)
+        setSelectedSteps([]) // Reset selected steps when template changes
+    }
+
+    const handleStepToggle = (stepId) => {
+        setSelectedSteps(prev => {
+            const isSelected = prev.includes(stepId)
+            if (isSelected) {
+                return prev.filter(id => id !== stepId)
+            } else {
+                return [...prev, stepId]
+            }
+        })
+    }
+
     const handleSubmit = async (e) => {
         e.preventDefault()
         setLoading(true)
@@ -57,11 +88,16 @@ export default function NewService() {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(formData),
+                body: JSON.stringify({
+                    ...formData,
+                    selected_steps: selectedSteps,
+                    deliverables: formData.additional_deliverables || ''
+                }),
             })
 
             if (!response.ok) {
-                throw new Error('Failed to create service')
+                const errorData = await response.json()
+                throw new Error(errorData.message || 'Failed to create service')
             }
 
             router.push('/services')
@@ -232,7 +268,7 @@ export default function NewService() {
                                         <select
                                             name="process_template_id"
                                             value={formData.process_template_id}
-                                            onChange={handleChange}
+                                            onChange={handleTemplateChange}
                                             className="select select-bordered"
                                             required
                                         >
@@ -244,18 +280,89 @@ export default function NewService() {
                                             ))}
                                         </select>
                                         <label className="label">
-                                            <span className="label-text-alt">This template will be used when creating projects for this service</span>
+                                            <span className="label-text-alt">Select the process template and then choose specific steps below</span>
                                         </label>
                                     </div>
 
-                                    {formData.process_template_id && (
-                                        <div className="bg-base-200 p-4 rounded-lg">
-                                            <h3 className="font-medium mb-2">Template Details</h3>
-                                            {processTemplates.find(t => t.template_id === formData.process_template_id)?.steps?.map((step, index) => (
-                                                <div key={index} className="text-sm text-base-content/70">
-                                                    {index + 1}. {step.name}
+                                    {selectedTemplate && (
+                                        <div className="space-y-4">
+                                            <div className="divider">Select Steps and Tasks</div>
+                                            
+                                            {selectedTemplate.steps?.map((step) => (
+                                                <div key={step.step_id} className="card bg-base-100 shadow p-4">
+                                                    <div className="font-medium text-lg mb-2">{step.name}</div>
+                                                    <div className="space-y-2 ml-4">
+                                                        {step.tasks?.map((task) => (
+                                                            <div key={task.task_template_id} className="space-y-2">
+                                                                <label className="flex items-start gap-2 cursor-pointer">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        className="checkbox mt-1"
+                                                                        checked={selectedSteps.includes(task.task_template_id)}
+                                                                        onChange={() => handleStepToggle(task.task_template_id)}
+                                                                    />
+                                                                    <div>
+                                                                        <div className="font-medium">{task.name}</div>
+                                                                        {task.description && (
+                                                                            <div className="text-sm text-base-content/70">{task.description}</div>
+                                                                        )}
+                                                                        <div className="text-sm text-base-content/70">
+                                                                            Estimated: {task.estimated_hours}h
+                                                                        </div>
+                                                                    </div>
+                                                                </label>
+                                                                
+                                                                {task.sub_tasks?.map((subTask) => (
+                                                                    <label 
+                                                                        key={subTask.sub_task_template_id} 
+                                                                        className="flex items-start gap-2 ml-6 cursor-pointer"
+                                                                    >
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            className="checkbox checkbox-sm mt-1"
+                                                                            checked={selectedSteps.includes(subTask.sub_task_template_id)}
+                                                                            onChange={() => handleStepToggle(subTask.sub_task_template_id)}
+                                                                        />
+                                                                        <div>
+                                                                            <div className="font-medium">{subTask.name}</div>
+                                                                            {subTask.description && (
+                                                                                <div className="text-sm text-base-content/70">
+                                                                                    {subTask.description}
+                                                                                </div>
+                                                                            )}
+                                                                            <div className="text-sm text-base-content/70">
+                                                                                Estimated: {subTask.estimated_hours}h
+                                                                            </div>
+                                                                        </div>
+                                                                    </label>
+                                                                ))}
+                                                            </div>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             ))}
+
+                                            {selectedSteps.length > 0 && (
+                                                <div className="card bg-base-200 p-4">
+                                                    <h3 className="font-medium mb-2">Selected Tasks</h3>
+                                                    <div className="space-y-1">
+                                                        {selectedSteps.map(taskId => {
+                                                            const task = selectedTemplate.steps
+                                                                .flatMap(s => [
+                                                                    ...s.tasks,
+                                                                    ...s.tasks.flatMap(t => t.sub_tasks || [])
+                                                                ])
+                                                                .find(t => t.task_template_id === taskId || t.sub_task_template_id === taskId)
+                                                            
+                                                            return task ? (
+                                                                <div key={taskId} className="text-sm">
+                                                                    • {task.name} ({task.estimated_hours}h)
+                                                                </div>
+                                                            ) : null
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -282,15 +389,14 @@ export default function NewService() {
 
                                     <div className="form-control">
                                         <label className="label">
-                                            <span className="label-text">Deliverables</span>
+                                            <span className="label-text">Additional Deliverables</span>
                                         </label>
                                         <textarea
-                                            name="deliverables"
-                                            value={formData.deliverables}
+                                            name="additional_deliverables"
+                                            value={formData.additional_deliverables || ''}
                                             onChange={handleChange}
                                             className="textarea textarea-bordered h-24"
-                                            placeholder="Enter each deliverable on a new line"
-                                            required
+                                            placeholder="Enter any additional deliverables for this service..."
                                         />
                                     </div>
                                 </div>
