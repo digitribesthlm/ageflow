@@ -91,7 +91,7 @@ export default function Clients() {
                 <td>{client.contactInfo?.phone}</td>
                 <td className="text-right">
                   <button
-                    onClick={() => router.push(`/clients/${client._id}`)}
+                    onClick={() => router.push(`/clients/${client.client_id}`)}
                     className="btn btn-primary btn-sm"
                   >
                     View Details

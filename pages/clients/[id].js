@@ -132,10 +132,10 @@ export default function ClientDetails() {
                   onClick={() => router.push(`/contracts/${contract.contract_id}`)}
                 >
                   <div className="flex justify-between items-center">
-                    <div>
+                    <div className="flex-1">
                       <p className="font-medium">${contract.monthly_fee}/month</p>
                       <p className="text-sm text-gray-600">
-                        Next billing: {new Date(contract.billing.next_billing_date).toLocaleDateString()}
+                        Next billing: {contract.billing?.next_billing_date ? new Date(contract.billing.next_billing_date).toLocaleDateString() : 'Not set'}
                       </p>
                     </div>
                     <span className="badge badge-success">Active</span>
