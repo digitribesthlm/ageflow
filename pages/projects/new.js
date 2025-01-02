@@ -4,6 +4,100 @@ import DashboardLayout from '../../components/DashboardLayout'
 import PageHeader from '../../components/PageHeader'
 import ContentContainer from '../../components/ContentContainer'
 
+const ProcessTemplateSelector = ({ service, templates, onSelect }) => {
+    const [selectedTemplate, setSelectedTemplate] = useState(null)
+    const [selectedSteps, setSelectedSteps] = useState([])
+
+    const handleTemplateChange = (templateId) => {
+        const template = templates.find(t => t.template_id === templateId)
+        setSelectedTemplate(template)
+        setSelectedSteps([])
+        onSelect(service.service_id, templateId, [])
+    }
+
+    const handleStepSelect = (stepId, subStepId) => {
+        const newSelectedSteps = [...selectedSteps]
+        const stepKey = `${stepId}${subStepId ? ':' + subStepId : ''}`
+        
+        if (newSelectedSteps.includes(stepKey)) {
+            const index = newSelectedSteps.indexOf(stepKey)
+            newSelectedSteps.splice(index, 1)
+        } else {
+            newSelectedSteps.push(stepKey)
+        }
+        
+        setSelectedSteps(newSelectedSteps)
+        onSelect(service.service_id, selectedTemplate.template_id, newSelectedSteps)
+    }
+
+    return (
+        <div className="card bg-base-200 p-4 mb-4">
+            <h3 className="font-medium mb-2">{service.name}</h3>
+            
+            <div className="form-control w-full mb-4">
+                <label className="label">
+                    <span className="label-text">Select Process Template</span>
+                </label>
+                <select
+                    className="select select-bordered"
+                    value={selectedTemplate?.template_id || ''}
+                    onChange={(e) => handleTemplateChange(e.target.value)}
+                >
+                    <option value="">Select a template</option>
+                    {templates
+                        .filter(template => template.service_id === service.service_id)
+                        .map(template => (
+                            <option key={template.template_id} value={template.template_id}>
+                                {template.name} (v{template.version})
+                            </option>
+                        ))
+                    }
+                </select>
+            </div>
+
+            {selectedTemplate && (
+                <div className="space-y-4">
+                    <label className="label">
+                        <span className="label-text font-medium">Select Steps</span>
+                    </label>
+                    {selectedTemplate.steps.map(step => (
+                        <div key={step.step_id} className="card bg-base-100 p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <input
+                                    type="checkbox"
+                                    className="checkbox"
+                                    checked={selectedSteps.includes(step.step_id)}
+                                    onChange={() => handleStepSelect(step.step_id)}
+                                />
+                                <span className="font-medium">{step.name}</span>
+                            </div>
+                            
+                            {step.sub_steps && (
+                                <div className="ml-6 space-y-2">
+                                    {step.sub_steps.map(subStep => (
+                                        <div key={subStep.sub_step_id} className="flex items-center gap-2">
+                                            <input
+                                                type="checkbox"
+                                                className="checkbox checkbox-sm"
+                                                checked={selectedSteps.includes(`${step.step_id}:${subStep.sub_step_id}`)}
+                                                onChange={() => handleStepSelect(step.step_id, subStep.sub_step_id)}
+                                            />
+                                            <span>{subStep.name}</span>
+                                            <span className="text-sm opacity-70">
+                                                ({subStep.estimated_hours}h)
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
+
 export default function NewProject() {
     const router = useRouter()
     const [loading, setLoading] = useState(true)
@@ -205,21 +299,43 @@ export default function NewProject() {
         setError(null)
 
         try {
-            // Create phases from selected process templates
+            // Create phases from selected process templates and steps
             const phases = []
             formData.services.forEach(service => {
-                service.process_templates.forEach(templateId => {
-                    const template = processTemplates.find(t => t.template_id === templateId)
+                service.process_templates.forEach(templateData => {
+                    const template = processTemplates.find(t => t.template_id === templateData.template_id)
                     if (template) {
-                        phases.push({
-                            name: template.name,
-                            service_id: service.service_id,
-                            template_id: template.template_id,
-                            status: 'pending',
-                            steps: template.steps.map(step => ({
-                                ...step,
-                                status: 'pending'
-                            }))
+                        template.steps.forEach(step => {
+                            if (templateData.selected_steps.includes(step.step_id)) {
+                                // Add main step as a phase
+                                phases.push({
+                                    name: step.name,
+                                    step_id: step.step_id,
+                                    service_id: service.service_id,
+                                    template_id: template.template_id,
+                                    status: 'pending',
+                                    order: step.order,
+                                    estimated_hours: step.estimated_hours || 0,
+                                    sub_steps: []
+                                })
+                            }
+                            
+                            // Add selected sub-steps
+                            step.sub_steps?.forEach(subStep => {
+                                if (templateData.selected_steps.includes(`${step.step_id}:${subStep.sub_step_id}`)) {
+                                    const phaseIndex = phases.findIndex(p => 
+                                        p.step_id === step.step_id && 
+                                        p.template_id === template.template_id
+                                    )
+                                    
+                                    if (phaseIndex >= 0) {
+                                        phases[phaseIndex].sub_steps.push({
+                                            ...subStep,
+                                            status: 'pending'
+                                        })
+                                    }
+                                }
+                            })
                         })
                     }
                 })
@@ -227,7 +343,7 @@ export default function NewProject() {
 
             const projectData = {
                 ...formData,
-                phases,
+                phases: phases.sort((a, b) => a.order - b.order),
                 created_at: new Date(),
                 updated_at: new Date()
             }
@@ -363,36 +479,27 @@ export default function NewProject() {
                                 <div className="divider">Services & Process Templates</div>
 
                                 {formData.services.map((service) => (
-                                    <div key={service.service_id} className="card bg-base-200 p-4 mb-4">
-                                        <h3 className="font-medium mb-2">{service.name}</h3>
-                                        
-                                        <div className="form-control w-full">
-                                            <label className="label">
-                                                <span className="label-text">Select Process Templates</span>
-                                            </label>
-                                            <select
-                                                multiple
-                                                className="select select-bordered min-h-[100px]"
-                                                value={service.process_templates}
-                                                onChange={(e) => {
-                                                    const selectedOptions = Array.from(e.target.selectedOptions).map(opt => opt.value)
-                                                    handleProcessTemplateSelect(service.service_id, selectedOptions)
-                                                }}
-                                            >
-                                                {processTemplates
-                                                    .filter(template => template.service_id === service.service_id)
-                                                    .map(template => (
-                                                        <option key={template.template_id} value={template.template_id}>
-                                                            {template.name} (v{template.version})
-                                                        </option>
-                                                    ))
-                                                }
-                                            </select>
-                                            <label className="label">
-                                                <span className="label-text-alt">Hold Ctrl/Cmd to select multiple templates</span>
-                                            </label>
-                                        </div>
-                                    </div>
+                                    <ProcessTemplateSelector
+                                        key={service.service_id}
+                                        service={service}
+                                        templates={processTemplates}
+                                        onSelect={(serviceId, templateId, selectedSteps) => {
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                services: prev.services.map(s => 
+                                                    s.service_id === serviceId
+                                                        ? { 
+                                                            ...s, 
+                                                            process_templates: [{
+                                                                template_id: templateId,
+                                                                selected_steps: selectedSteps
+                                                            }]
+                                                        }
+                                                        : s
+                                                )
+                                            }))
+                                        }}
+                                    />
                                 ))}
 
                                 <div className="card-actions justify-end mt-6">
