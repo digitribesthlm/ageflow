@@ -139,6 +139,26 @@ export default function ProjectTasks() {
     }
   }
 
+  const updateTaskDetails = async (taskId, updateData) => {
+    try {
+      const response = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData),
+      })
+
+      if (response.ok) {
+        await fetchTasks()
+      } else {
+        throw new Error('Failed to update task')
+      }
+    } catch (error) {
+      setError(error.message)
+    }
+  }
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'completed':
@@ -200,20 +220,69 @@ export default function ProjectTasks() {
               <tr key={task.task_id}>
                 <td>
                   <div>
-                    <div className="font-medium">{task.title}</div>
+                    <div className="font-medium">{task.title || task.name}</div>
                     <div className="text-sm text-base-content/70">{task.description}</div>
                   </div>
                 </td>
                 <td>
-                  {employees.find(e => e.employee_id === task.assigned_to)?.name || 'Unassigned'}
+                  <div className="dropdown dropdown-hover">
+                    <label tabIndex={0} className="btn btn-ghost btn-sm">
+                      {employees.find(e => e.employee_id === task.assigned_to)?.name || 'Unassigned'}
+                    </label>
+                    <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52 max-h-60 overflow-y-auto">
+                      {employees.map((employee) => (
+                        <li key={employee.employee_id}>
+                          <button 
+                            onClick={() => updateTaskDetails(task.task_id, { assigned_to: employee.employee_id })}
+                            className={task.assigned_to === employee.employee_id ? 'active' : ''}
+                          >
+                            {employee.name}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </td>
                 <td>
-                  {new Date(task.due_date).toLocaleDateString()}
+                  <input
+                    type="date"
+                    className="input input-bordered input-sm w-40"
+                    value={task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : ''}
+                    onChange={(e) => updateTaskDetails(task.task_id, { due_date: e.target.value })}
+                  />
                 </td>
                 <td>
-                  <span className={`font-medium ${getPriorityColor(task.priority)}`}>
-                    {task.priority}
-                  </span>
+                  <div className="dropdown dropdown-hover">
+                    <label tabIndex={0} className={`btn btn-ghost btn-sm ${getPriorityColor(task.priority)}`}>
+                      {task.priority || 'Set Priority'}
+                    </label>
+                    <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-32">
+                      <li>
+                        <button 
+                          onClick={() => updateTaskDetails(task.task_id, { priority: 'low' })}
+                          className={task.priority === 'low' ? 'active' : ''}
+                        >
+                          Low
+                        </button>
+                      </li>
+                      <li>
+                        <button 
+                          onClick={() => updateTaskDetails(task.task_id, { priority: 'medium' })}
+                          className={task.priority === 'medium' ? 'active' : ''}
+                        >
+                          Medium
+                        </button>
+                      </li>
+                      <li>
+                        <button 
+                          onClick={() => updateTaskDetails(task.task_id, { priority: 'high' })}
+                          className={task.priority === 'high' ? 'active' : ''}
+                        >
+                          High
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
                 </td>
                 <td>
                   <div className={`badge ${getStatusColor(task.status)}`}>
