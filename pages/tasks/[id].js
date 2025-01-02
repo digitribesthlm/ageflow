@@ -9,8 +9,11 @@ export default function TaskDetails() {
   const { id } = router.query
   const [task, setTask] = useState(null)
   const [project, setProject] = useState(null)
+  const [client, setClient] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [editingDescription, setEditingDescription] = useState(false)
+  const [description, setDescription] = useState('')
 
   useEffect(() => {
     if (id) {
@@ -26,6 +29,7 @@ export default function TaskDetails() {
       }
       const taskData = await taskRes.json()
       setTask(taskData)
+      setDescription(taskData.description || '')
 
       // Fetch project details if task has project_id
       if (taskData.project_id) {
@@ -33,6 +37,15 @@ export default function TaskDetails() {
         if (projectRes.ok) {
           const projectData = await projectRes.json()
           setProject(projectData)
+
+          // Fetch client details if project has client_id
+          if (projectData.client_id) {
+            const clientRes = await fetch(`/api/clients/${projectData.client_id}`)
+            if (clientRes.ok) {
+              const clientData = await clientRes.json()
+              setClient(clientData)
+            }
+          }
         }
       }
     } catch (error) {
@@ -56,6 +69,27 @@ export default function TaskDetails() {
         await fetchTaskData()
       } else {
         throw new Error('Failed to update task status')
+      }
+    } catch (error) {
+      setError(error.message)
+    }
+  }
+
+  const updateTaskDescription = async () => {
+    try {
+      const response = await fetch(`/api/tasks/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ description }),
+      })
+
+      if (response.ok) {
+        setEditingDescription(false)
+        await fetchTaskData()
+      } else {
+        throw new Error('Failed to update task description')
       }
     } catch (error) {
       setError(error.message)
@@ -157,8 +191,35 @@ export default function TaskDetails() {
 
               <div className="space-y-4">
                 <div>
-                  <h3 className="font-medium mb-2">Description</h3>
-                  <p className="text-base-content/70">{task.description}</p>
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="font-medium">Description</h3>
+                    <button 
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => setEditingDescription(!editingDescription)}
+                    >
+                      {editingDescription ? 'Cancel' : 'Edit'}
+                    </button>
+                  </div>
+                  {editingDescription ? (
+                    <div className="space-y-2">
+                      <textarea
+                        className="textarea textarea-bordered w-full h-32"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Enter task description..."
+                      />
+                      <div className="flex justify-end">
+                        <button 
+                          className="btn btn-primary btn-sm"
+                          onClick={updateTaskDescription}
+                        >
+                          Save Description
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-base-content/70">{task.description || 'No description provided'}</p>
+                  )}
                 </div>
 
                 {task.instruction_doc && (
@@ -203,32 +264,43 @@ export default function TaskDetails() {
             </div>
           </div>
 
-          {/* Project Context */}
-          {project && (
-            <div className="card bg-base-100 shadow-xl">
-              <div className="card-body">
-                <h3 className="card-title">Project Context</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Project and Client Context */}
+          <div className="card bg-base-100 shadow-xl">
+            <div className="card-body">
+              <h3 className="card-title">Project & Client Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {project && (
                   <div>
                     <h4 className="font-medium mb-2">Project</h4>
                     <p>{project.name}</p>
+                    <button
+                      onClick={() => router.push(`/projects/${project.project_id}`)}
+                      className="btn btn-outline btn-sm mt-2"
+                    >
+                      View Project Details
+                    </button>
                   </div>
+                )}
+                {client && (
                   <div>
                     <h4 className="font-medium mb-2">Client</h4>
-                    <p>{project.client_name}</p>
+                    <p>{client.name}</p>
+                    <p className="text-sm text-base-content/70">{client.company}</p>
+                    {client.website && (
+                      <a 
+                        href={client.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="link link-primary text-sm"
+                      >
+                        Visit Website
+                      </a>
+                    )}
                   </div>
-                </div>
-                <div className="mt-4">
-                  <button
-                    onClick={() => router.push(`/projects/${project.project_id}`)}
-                    className="btn btn-outline btn-sm"
-                  >
-                    View Project Details
-                  </button>
-                </div>
+                )}
               </div>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Task Details Sidebar */}

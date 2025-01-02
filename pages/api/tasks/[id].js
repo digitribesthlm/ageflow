@@ -35,7 +35,7 @@ export default async function handler(req, res) {
         return res.status(200).json(task)
 
       case 'PUT':
-        const { status, assigned_to, priority, due_date } = req.body
+        const { status, assigned_to, priority, due_date, description } = req.body
         const updateFields = {}
 
         // Add fields to update only if they are provided
@@ -43,6 +43,7 @@ export default async function handler(req, res) {
         if (assigned_to) updateFields.assigned_to = assigned_to
         if (priority) updateFields.priority = priority
         if (due_date) updateFields.due_date = new Date(due_date)
+        if (description !== undefined) updateFields.description = description
 
         // Always update the updated_at timestamp
         updateFields.updated_at = new Date()
