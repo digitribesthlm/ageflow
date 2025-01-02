@@ -36,10 +36,19 @@ export default async function handler(req, res) {
                     return res.status(404).json({ message: 'Contract not found' })
                 }
 
-                // Get all service details for the packages
-                const serviceIds = contract.packages
-                    ?.flatMap(pkg => pkg.includedServices?.map(s => s.service_id) || [])
-                    || []
+                // Get package details first
+                const packageIds = contract.packages?.map(pkg => pkg.package_id) || []
+                console.log('Looking up packages:', packageIds)
+
+                const packageDetails = await db.collection('agency_service_packages')
+                    .find({ package_id: { $in: packageIds } })
+                    .toArray()
+
+                console.log('Found packages:', packageDetails)
+
+                // Get all service IDs from the packages
+                const serviceIds = packageDetails
+                    .flatMap(pkg => pkg.includedServices?.map(s => s.service_id) || [])
 
                 console.log('Looking up services:', serviceIds)
 
@@ -49,20 +58,25 @@ export default async function handler(req, res) {
 
                 console.log('Found services:', services)
 
-                // Enhance the contract packages with full service details
-                contract.packages = (contract.packages || []).map(pkg => ({
-                    ...pkg,
-                    includedServices: pkg.includedServices?.map(service => {
-                        const fullService = services.find(s => s.service_id === service.service_id)
-                        return {
-                            ...service,
-                            name: fullService?.name,
-                            description: fullService?.description,
-                            process_template_id: fullService?.process_template_id,
-                            selected_steps: fullService?.selected_steps
-                        }
-                    }) || []
-                }))
+                // Enhance the contract packages with full package and service details
+                contract.packages = (contract.packages || []).map(contractPkg => {
+                    const fullPackage = packageDetails.find(p => p.package_id === contractPkg.package_id)
+                    return {
+                        ...contractPkg,
+                        name: fullPackage?.name,
+                        description: fullPackage?.description,
+                        includedServices: fullPackage?.includedServices?.map(service => {
+                            const fullService = services.find(s => s.service_id === service.service_id)
+                            return {
+                                ...service,
+                                name: fullService?.name,
+                                description: fullService?.description,
+                                process_template_id: fullService?.process_template_id,
+                                selected_steps: fullService?.selected_steps
+                            }
+                        }) || []
+                    }
+                })
 
                 console.log('Returning enhanced contract:', contract)
                 return res.status(200).json(contract)

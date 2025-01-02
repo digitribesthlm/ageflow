@@ -8,11 +8,24 @@ const ProcessTemplateSelector = ({ service, templates, onSelect }) => {
     const [selectedTemplate, setSelectedTemplate] = useState(null)
     const [selectedTasks, setSelectedTasks] = useState([])
 
-    const handleTemplateChange = (templateId) => {
-        const template = templates.find(t => t.template_id === templateId)
-        setSelectedTemplate(template)
-        setSelectedTasks([])
-        onSelect(service.service_id, templateId, [])
+    // Initialize with pre-selected template and steps
+    useEffect(() => {
+        if (service.process_template_id) {
+            const template = templates.find(t => t.template_id === service.process_template_id)
+            if (template) {
+                console.log('Service selected steps:', service.selected_steps)
+                setSelectedTemplate(template)
+                setSelectedTasks(service.selected_steps || [])
+                // Also notify parent about pre-selected steps
+                onSelect(service.service_id, template.template_id, service.selected_steps || [])
+            }
+        }
+    }, [service.process_template_id, service.selected_steps])
+
+    // Helper function to check if a task should be shown
+    const isTaskInSelectedSteps = (stepId, taskId, subTaskId = null) => {
+        const taskKey = `${stepId}:${taskId}${subTaskId ? ':' + subTaskId : ''}`
+        return service.selected_steps?.includes(taskKey) || false
     }
 
     const handleTaskSelect = (stepId, taskTemplateId, subTaskTemplateId = null) => {
@@ -34,74 +47,81 @@ const ProcessTemplateSelector = ({ service, templates, onSelect }) => {
         <div className="card bg-base-200 p-4 mb-4">
             <h3 className="font-medium mb-2">{service.name}</h3>
             
-            <div className="form-control w-full mb-4">
-                <label className="label">
-                    <span className="label-text">Select Process Template</span>
-                </label>
-                <select
-                    className="select select-bordered"
-                    value={selectedTemplate?.template_id || ''}
-                    onChange={(e) => handleTemplateChange(e.target.value)}
-                >
-                    <option value="">Select a template</option>
-                    {templates
-                        .filter(template => template.service_id === service.service_id)
-                        .map(template => (
-                            <option key={template.template_id} value={template.template_id}>
-                                {template.name} (v{template.version})
-                            </option>
-                        ))
-                    }
-                </select>
-            </div>
-
             {selectedTemplate && (
                 <div className="space-y-4">
                     <label className="label">
-                        <span className="label-text font-medium">Select Tasks</span>
+                        <span className="label-text font-medium">Selected Tasks</span>
                     </label>
-                    {selectedTemplate.steps.map(step => (
-                        <div key={step.step_id} className="card bg-base-100 p-4">
-                            <div className="font-medium mb-2">{step.name}</div>
-                            <div className="space-y-2 ml-4">
-                                {step.tasks.map(task => (
-                                    <div key={task.task_template_id} className="space-y-2">
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                type="checkbox"
-                                                className="checkbox"
-                                                checked={selectedTasks.includes(`${step.step_id}:${task.task_template_id}`)}
-                                                onChange={() => handleTaskSelect(step.step_id, task.task_template_id)}
-                                            />
-                                            <span className="font-medium">{task.name}</span>
-                                            <span className="text-sm opacity-70">
-                                                ({task.estimated_hours}h)
-                                            </span>
-                                        </div>
-                                        
-                                        {task.sub_tasks && (
-                                            <div className="ml-6 space-y-2">
-                                                {task.sub_tasks.map(subTask => (
-                                                    <div key={subTask.sub_task_template_id} className="flex items-center gap-2">
+                    {selectedTemplate.steps.map(step => {
+                        // Only show steps that have selected tasks
+                        const hasSelectedTasks = step.tasks.some(task => 
+                            isTaskInSelectedSteps(step.step_id, task.task_template_id) ||
+                            task.sub_tasks?.some(subTask => 
+                                isTaskInSelectedSteps(step.step_id, task.task_template_id, subTask.sub_task_template_id)
+                            )
+                        )
+
+                        if (!hasSelectedTasks) return null
+
+                        return (
+                            <div key={step.step_id} className="card bg-base-100 p-4">
+                                <div className="font-medium mb-2">{step.name}</div>
+                                <div className="space-y-2 ml-4">
+                                    {step.tasks.map(task => {
+                                        const isMainTaskSelected = isTaskInSelectedSteps(step.step_id, task.task_template_id)
+                                        const hasSelectedSubTasks = task.sub_tasks?.some(subTask => 
+                                            isTaskInSelectedSteps(step.step_id, task.task_template_id, subTask.sub_task_template_id)
+                                        )
+
+                                        if (!isMainTaskSelected && !hasSelectedSubTasks) return null
+
+                                        return (
+                                            <div key={task.task_template_id} className="space-y-2">
+                                                {isMainTaskSelected && (
+                                                    <div className="flex items-center gap-2">
                                                         <input
                                                             type="checkbox"
-                                                            className="checkbox checkbox-sm"
-                                                            checked={selectedTasks.includes(`${step.step_id}:${task.task_template_id}:${subTask.sub_task_template_id}`)}
-                                                            onChange={() => handleTaskSelect(step.step_id, task.task_template_id, subTask.sub_task_template_id)}
+                                                            className="checkbox"
+                                                            checked={selectedTasks.includes(`${step.step_id}:${task.task_template_id}`)}
+                                                            onChange={() => handleTaskSelect(step.step_id, task.task_template_id)}
                                                         />
-                                                        <span>{subTask.name}</span>
+                                                        <span className="font-medium">{task.name}</span>
                                                         <span className="text-sm opacity-70">
-                                                            ({subTask.estimated_hours}h)
+                                                            ({task.estimated_hours}h)
                                                         </span>
                                                     </div>
-                                                ))}
+                                                )}
+                                                
+                                                {task.sub_tasks && (
+                                                    <div className="ml-6 space-y-2">
+                                                        {task.sub_tasks.map(subTask => {
+                                                            if (!isTaskInSelectedSteps(step.step_id, task.task_template_id, subTask.sub_task_template_id)) {
+                                                                return null
+                                                            }
+                                                            return (
+                                                                <div key={subTask.sub_task_template_id} className="flex items-center gap-2">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        className="checkbox checkbox-sm"
+                                                                        checked={selectedTasks.includes(`${step.step_id}:${task.task_template_id}:${subTask.sub_task_template_id}`)}
+                                                                        onChange={() => handleTaskSelect(step.step_id, task.task_template_id, subTask.sub_task_template_id)}
+                                                                    />
+                                                                    <span>{subTask.name}</span>
+                                                                    <span className="text-sm opacity-70">
+                                                                        ({subTask.estimated_hours}h)
+                                                                    </span>
+                                                                </div>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
-                                ))}
+                                        )
+                                    })}
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        )
+                    })}
                 </div>
             )}
         </div>
@@ -216,6 +236,7 @@ export default function NewProject() {
                 .map(service => ({
                     service_id: service.service_id,
                     name: service.name,
+                    description: service.description,
                     process_template_id: service.process_template_id,
                     selected_steps: service.selected_steps || []
                 })) || []
@@ -228,7 +249,13 @@ export default function NewProject() {
                 contract_id: contractId,
                 client_id: contract.client_id,
                 name: `${contract.client_id} Project - ${new Date().toLocaleDateString()}`,
-                services: servicesFromPackages,
+                services: servicesFromPackages.map(service => ({
+                    ...service,
+                    process_templates: service.process_template_id ? [{
+                        template_id: service.process_template_id,
+                        selected_steps: service.selected_steps || []
+                    }] : []
+                })),
                 total_budget: contract.monthly_fee || 0,
                 start_date: new Date().toISOString().split('T')[0],
                 end_date: ''
