@@ -6,28 +6,28 @@ import ContentContainer from '../../components/ContentContainer'
 
 const ProcessTemplateSelector = ({ service, templates, onSelect }) => {
     const [selectedTemplate, setSelectedTemplate] = useState(null)
-    const [selectedSteps, setSelectedSteps] = useState([])
+    const [selectedTasks, setSelectedTasks] = useState([])
 
     const handleTemplateChange = (templateId) => {
         const template = templates.find(t => t.template_id === templateId)
         setSelectedTemplate(template)
-        setSelectedSteps([])
+        setSelectedTasks([])
         onSelect(service.service_id, templateId, [])
     }
 
-    const handleStepSelect = (stepId, subStepId) => {
-        const newSelectedSteps = [...selectedSteps]
-        const stepKey = `${stepId}${subStepId ? ':' + subStepId : ''}`
+    const handleTaskSelect = (stepId, taskTemplateId, subTaskTemplateId = null) => {
+        const newSelectedTasks = [...selectedTasks]
+        const taskKey = `${stepId}:${taskTemplateId}${subTaskTemplateId ? ':' + subTaskTemplateId : ''}`
         
-        if (newSelectedSteps.includes(stepKey)) {
-            const index = newSelectedSteps.indexOf(stepKey)
-            newSelectedSteps.splice(index, 1)
+        if (newSelectedTasks.includes(taskKey)) {
+            const index = newSelectedTasks.indexOf(taskKey)
+            newSelectedTasks.splice(index, 1)
         } else {
-            newSelectedSteps.push(stepKey)
+            newSelectedTasks.push(taskKey)
         }
         
-        setSelectedSteps(newSelectedSteps)
-        onSelect(service.service_id, selectedTemplate.template_id, newSelectedSteps)
+        setSelectedTasks(newSelectedTasks)
+        onSelect(service.service_id, selectedTemplate.template_id, newSelectedTasks)
     }
 
     return (
@@ -58,38 +58,48 @@ const ProcessTemplateSelector = ({ service, templates, onSelect }) => {
             {selectedTemplate && (
                 <div className="space-y-4">
                     <label className="label">
-                        <span className="label-text font-medium">Select Steps</span>
+                        <span className="label-text font-medium">Select Tasks</span>
                     </label>
                     {selectedTemplate.steps.map(step => (
                         <div key={step.step_id} className="card bg-base-100 p-4">
-                            <div className="flex items-center gap-2 mb-2">
-                                <input
-                                    type="checkbox"
-                                    className="checkbox"
-                                    checked={selectedSteps.includes(step.step_id)}
-                                    onChange={() => handleStepSelect(step.step_id)}
-                                />
-                                <span className="font-medium">{step.name}</span>
-                            </div>
-                            
-                            {step.sub_steps && (
-                                <div className="ml-6 space-y-2">
-                                    {step.sub_steps.map(subStep => (
-                                        <div key={subStep.sub_step_id} className="flex items-center gap-2">
+                            <div className="font-medium mb-2">{step.name}</div>
+                            <div className="space-y-2 ml-4">
+                                {step.tasks.map(task => (
+                                    <div key={task.task_template_id} className="space-y-2">
+                                        <div className="flex items-center gap-2">
                                             <input
                                                 type="checkbox"
-                                                className="checkbox checkbox-sm"
-                                                checked={selectedSteps.includes(`${step.step_id}:${subStep.sub_step_id}`)}
-                                                onChange={() => handleStepSelect(step.step_id, subStep.sub_step_id)}
+                                                className="checkbox"
+                                                checked={selectedTasks.includes(`${step.step_id}:${task.task_template_id}`)}
+                                                onChange={() => handleTaskSelect(step.step_id, task.task_template_id)}
                                             />
-                                            <span>{subStep.name}</span>
+                                            <span className="font-medium">{task.name}</span>
                                             <span className="text-sm opacity-70">
-                                                ({subStep.estimated_hours}h)
+                                                ({task.estimated_hours}h)
                                             </span>
                                         </div>
-                                    ))}
-                                </div>
-                            )}
+                                        
+                                        {task.sub_tasks && (
+                                            <div className="ml-6 space-y-2">
+                                                {task.sub_tasks.map(subTask => (
+                                                    <div key={subTask.sub_task_template_id} className="flex items-center gap-2">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="checkbox checkbox-sm"
+                                                            checked={selectedTasks.includes(`${step.step_id}:${task.task_template_id}:${subTask.sub_task_template_id}`)}
+                                                            onChange={() => handleTaskSelect(step.step_id, task.task_template_id, subTask.sub_task_template_id)}
+                                                        />
+                                                        <span>{subTask.name}</span>
+                                                        <span className="text-sm opacity-70">
+                                                            ({subTask.estimated_hours}h)
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -299,43 +309,94 @@ export default function NewProject() {
         setError(null)
 
         try {
-            // Create phases from selected process templates and steps
+            // Create phases and tasks from selected process templates
             const phases = []
+            const tasks = []
+            
             formData.services.forEach(service => {
                 service.process_templates.forEach(templateData => {
                     const template = processTemplates.find(t => t.template_id === templateData.template_id)
                     if (template) {
                         template.steps.forEach(step => {
-                            if (templateData.selected_steps.includes(step.step_id)) {
-                                // Add main step as a phase
-                                phases.push({
+                            const selectedTasksInStep = templateData.selected_steps.filter(
+                                taskKey => taskKey.startsWith(step.step_id)
+                            )
+                            
+                            if (selectedTasksInStep.length > 0) {
+                                // Create phase
+                                const phase = {
                                     name: step.name,
                                     step_id: step.step_id,
                                     service_id: service.service_id,
                                     template_id: template.template_id,
                                     status: 'pending',
                                     order: step.order,
-                                    estimated_hours: step.estimated_hours || 0,
-                                    sub_steps: []
-                                })
-                            }
-                            
-                            // Add selected sub-steps
-                            step.sub_steps?.forEach(subStep => {
-                                if (templateData.selected_steps.includes(`${step.step_id}:${subStep.sub_step_id}`)) {
-                                    const phaseIndex = phases.findIndex(p => 
-                                        p.step_id === step.step_id && 
-                                        p.template_id === template.template_id
-                                    )
-                                    
-                                    if (phaseIndex >= 0) {
-                                        phases[phaseIndex].sub_steps.push({
-                                            ...subStep,
-                                            status: 'pending'
+                                    estimated_hours: 0,
+                                    tasks: []
+                                }
+                                
+                                // Process selected tasks
+                                step.tasks.forEach(taskTemplate => {
+                                    const mainTaskKey = `${step.step_id}:${taskTemplate.task_template_id}`
+                                    if (templateData.selected_steps.includes(mainTaskKey)) {
+                                        const taskId = `TSK_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+                                        
+                                        // Create main task
+                                        const task = {
+                                            task_id: taskId,
+                                            name: taskTemplate.name,
+                                            description: taskTemplate.description,
+                                            service_id: service.service_id,
+                                            project_id: '', // Will be set after project creation
+                                            phase_id: phase.step_id,
+                                            template_id: template.template_id,
+                                            task_template_id: taskTemplate.task_template_id,
+                                            estimated_hours: taskTemplate.estimated_hours,
+                                            required_tools: taskTemplate.required_tools || [],
+                                            deliverables: taskTemplate.deliverables || [],
+                                            instruction_doc: taskTemplate.instruction_doc,
+                                            status: 'pending',
+                                            created_at: new Date(),
+                                            updated_at: new Date()
+                                        }
+                                        
+                                        tasks.push(task)
+                                        phase.tasks.push(taskId)
+                                        phase.estimated_hours += taskTemplate.estimated_hours
+                                        
+                                        // Process sub-tasks if any
+                                        taskTemplate.sub_tasks?.forEach(subTaskTemplate => {
+                                            const subTaskKey = `${step.step_id}:${taskTemplate.task_template_id}:${subTaskTemplate.sub_task_template_id}`
+                                            if (templateData.selected_steps.includes(subTaskKey)) {
+                                                const subTaskId = `TSK_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+                                                
+                                                const subTask = {
+                                                    task_id: subTaskId,
+                                                    name: subTaskTemplate.name,
+                                                    description: subTaskTemplate.description,
+                                                    service_id: service.service_id,
+                                                    project_id: '', // Will be set after project creation
+                                                    phase_id: phase.step_id,
+                                                    parent_task_id: taskId,
+                                                    template_id: template.template_id,
+                                                    task_template_id: subTaskTemplate.sub_task_template_id,
+                                                    estimated_hours: subTaskTemplate.estimated_hours,
+                                                    instruction_doc: subTaskTemplate.instruction_doc,
+                                                    status: 'pending',
+                                                    created_at: new Date(),
+                                                    updated_at: new Date()
+                                                }
+                                                
+                                                tasks.push(subTask)
+                                                phase.tasks.push(subTaskId)
+                                                phase.estimated_hours += subTaskTemplate.estimated_hours
+                                            }
                                         })
                                     }
-                                }
-                            })
+                                })
+                                
+                                phases.push(phase)
+                            }
                         })
                     }
                 })
@@ -348,7 +409,8 @@ export default function NewProject() {
                 updated_at: new Date()
             }
 
-            const response = await fetch('/api/projects', {
+            // Create project first
+            const projectResponse = await fetch('/api/projects', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -356,12 +418,33 @@ export default function NewProject() {
                 body: JSON.stringify(projectData),
             })
 
-            if (response.ok) {
-                router.push('/projects')
-            } else {
-                const error = await response.json()
+            if (!projectResponse.ok) {
+                const error = await projectResponse.json()
                 throw new Error(error.message || 'Failed to create project')
             }
+
+            const project = await projectResponse.json()
+
+            // Create tasks with project ID
+            const tasksWithProject = tasks.map(task => ({
+                ...task,
+                project_id: project.project_id
+            }))
+
+            const tasksResponse = await fetch('/api/tasks/batch', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(tasksWithProject),
+            })
+
+            if (!tasksResponse.ok) {
+                const error = await tasksResponse.json()
+                throw new Error(error.message || 'Failed to create tasks')
+            }
+
+            router.push('/projects')
         } catch (error) {
             setError(error.message)
         } finally {
