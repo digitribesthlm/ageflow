@@ -21,32 +21,101 @@ export default async function handler(req, res) {
             const templates = await collection.find({ active: true }).toArray()
             console.log('Process templates from DB:', JSON.stringify(templates, null, 2))
 
-            // If templates don't have service_id, let's update them
-            if (templates.some(t => !t.service_id)) {
-                // Map categories to service IDs
-                const categoryToServiceMap = {
-                    'SEO': 'SRV001',
-                    'Content Marketing': 'SRV002',
-                    'Social Media': 'SRV003'
+            // If no templates exist or if SEO template is missing, create default templates
+            if (templates.length === 0 || !templates.some(t => t.template_id === 'PROC_SEO_MAIN')) {
+                const defaultSEOTemplate = {
+                    template_id: 'PROC_SEO_MAIN',
+                    name: 'SEO Process Template',
+                    category: 'SEO',
+                    service_id: 'SRV1735839347240', // Match the service ID from your data
+                    version: '1.0',
+                    steps: [
+                        {
+                            step_id: 'TASK_1',
+                            name: 'Initial Setup',
+                            order: 1,
+                            tasks: [
+                                {
+                                    task_template_id: 'TASK_1_1',
+                                    name: 'Keyword Research',
+                                    description: 'Conduct comprehensive keyword research',
+                                    estimated_hours: 4
+                                },
+                                {
+                                    task_template_id: 'TASK_1_2',
+                                    name: 'Competitor Analysis',
+                                    description: 'Analyze top competitors',
+                                    estimated_hours: 3
+                                },
+                                {
+                                    task_template_id: 'TASK_1_3',
+                                    name: 'Technical Audit',
+                                    description: 'Perform technical SEO audit',
+                                    estimated_hours: 4
+                                },
+                                {
+                                    task_template_id: 'TASK_1_4',
+                                    name: 'Content Audit',
+                                    description: 'Audit existing content',
+                                    estimated_hours: 4
+                                }
+                            ]
+                        },
+                        {
+                            step_id: 'TASK_2',
+                            name: 'Implementation',
+                            order: 2,
+                            tasks: [
+                                {
+                                    task_template_id: 'TASK_2_1',
+                                    name: 'On-Page Optimization',
+                                    description: 'Implement on-page SEO improvements',
+                                    estimated_hours: 8,
+                                    sub_tasks: [
+                                        {
+                                            sub_task_template_id: 'TASK_2_1_1',
+                                            name: 'Meta Tags Optimization',
+                                            description: 'Optimize title tags and meta descriptions',
+                                            estimated_hours: 2
+                                        },
+                                        {
+                                            sub_task_template_id: 'TASK_2_1_2',
+                                            name: 'Content Optimization',
+                                            description: 'Optimize existing content',
+                                            estimated_hours: 2
+                                        },
+                                        {
+                                            sub_task_template_id: 'TASK_2_1_3',
+                                            name: 'Internal Linking',
+                                            description: 'Improve internal linking structure',
+                                            estimated_hours: 2
+                                        },
+                                        {
+                                            sub_task_template_id: 'TASK_2_1_4',
+                                            name: 'URL Structure',
+                                            description: 'Optimize URL structure',
+                                            estimated_hours: 2
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ],
+                    active: true,
+                    created_at: new Date(),
+                    updated_at: new Date()
                 }
 
-                // Update templates with service_id based on category
-                const updatedTemplates = templates.map(template => {
-                    if (!template.service_id) {
-                        const service_id = categoryToServiceMap[template.category]
-                        if (service_id) {
-                            // Update in database
-                            collection.updateOne(
-                                { template_id: template.template_id },
-                                { $set: { service_id } }
-                            )
-                            return { ...template, service_id }
-                        }
-                    }
-                    return template
-                })
+                // Insert or update the SEO template
+                await collection.updateOne(
+                    { template_id: 'PROC_SEO_MAIN' },
+                    { $set: defaultSEOTemplate },
+                    { upsert: true }
+                )
 
-                console.log('Updated templates:', JSON.stringify(updatedTemplates, null, 2))
+                // Fetch updated templates
+                const updatedTemplates = await collection.find({ active: true }).toArray()
+                console.log('Templates after initialization:', JSON.stringify(updatedTemplates, null, 2))
                 return res.status(200).json(updatedTemplates)
             }
 
@@ -54,14 +123,14 @@ export default async function handler(req, res) {
         }
 
         if (req.method === 'POST') {
-            const { name, category, version, steps, service_id } = req.body
+            const { name, category, version, steps, service_id, template_id } = req.body
 
             if (!name || !category || !steps || !service_id) {
                 return res.status(400).json({ message: 'Missing required fields' })
             }
 
             const template = {
-                template_id: `PROC${Date.now()}`,
+                template_id: template_id || `PROC${Date.now()}`,
                 name,
                 category,
                 service_id,

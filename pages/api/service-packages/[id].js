@@ -57,7 +57,9 @@ export default async function handler(req, res) {
                             name: details?.name || 'Unknown Service',
                             category: details?.category,
                             description: details?.description,
-                            deliverables: details?.deliverables
+                            deliverables: details?.deliverables,
+                            process_template_id: details?.process_template_id,
+                            selected_steps: details?.selected_steps || []
                         }
                     }) || []
                 }

@@ -225,46 +225,46 @@ export default function NewProject() {
             }
             
             const contract = await response.json()
-            console.log('Contract details:', contract)
+            console.log('Contract details:', JSON.stringify(contract, null, 2))
 
             // Store the selected contract
             setSelectedContract(contract)
 
-            // Get all services from the contract's packages
+            // Get all services from the contract's packages with their process templates
             const servicesFromPackages = contract.packages
-                ?.flatMap(pkg => pkg.includedServices || [])
-                .map(service => ({
-                    service_id: service.service_id,
-                    name: service.name,
-                    description: service.description,
-                    process_template_id: service.process_template_id,
-                    selected_steps: service.selected_steps || []
-                })) || []
+                ?.flatMap(pkg => {
+                    return (pkg.includedServices || []).map(service => ({
+                        service_id: service.service_id,
+                        name: service.name,
+                        description: service.description,
+                        process_template_id: service.process_template_id,
+                        selected_steps: service.selected_steps || [],
+                        package_name: pkg.name,
+                        package_id: pkg.package_id,
+                        deliverables: service.deliverables || [],
+                        estimated_hours: service.estimated_hours,
+                        minimum_hours: service.minimum_hours,
+                        included_hours: service.included_hours,
+                        service_type: service.service_type,
+                        billing_type: service.billing_type,
+                        base_price: service.base_price,
+                        category: service.category
+                    }))
+                }) || []
 
-            console.log('Services from packages:', servicesFromPackages)
+            console.log('Services from packages:', JSON.stringify(servicesFromPackages, null, 2))
 
-            // Update form data
+            // Update form data with enhanced service information
             setFormData(prev => ({
                 ...prev,
                 contract_id: contractId,
                 client_id: contract.client_id,
-                name: `${contract.client_id} Project - ${new Date().toLocaleDateString()}`,
-                services: servicesFromPackages.map(service => ({
-                    ...service,
-                    process_templates: service.process_template_id ? [{
-                        template_id: service.process_template_id,
-                        selected_steps: service.selected_steps || []
-                    }] : []
-                })),
-                total_budget: contract.monthly_fee || 0,
-                start_date: new Date().toISOString().split('T')[0],
-                end_date: ''
+                services: servicesFromPackages
             }))
 
         } catch (error) {
-            console.error('Error in handleContractSelect:', error)
-            setError(error.message)
-            setSelectedContract(null)
+            console.error('Error selecting contract:', error)
+            setError('Failed to load contract details')
         } finally {
             setLoading(false)
         }
@@ -544,29 +544,110 @@ export default function NewProject() {
 
                                 <div className="divider">Services & Process Templates</div>
 
-                                {formData.services.map((service) => (
-                                    <ProcessTemplateSelector
-                                        key={service.service_id}
-                                        service={service}
-                                        templates={processTemplates}
-                                        onSelect={(serviceId, templateId, selectedSteps) => {
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                services: prev.services.map(s => 
-                                                    s.service_id === serviceId
-                                                        ? { 
-                                                            ...s, 
-                                                            process_templates: [{
-                                                                template_id: templateId,
-                                                                selected_steps: selectedSteps
-                                                            }]
-                                                        }
-                                                        : s
-                                                )
-                                            }))
-                                        }}
-                                    />
-                                ))}
+                                {selectedContract && formData.services.length > 0 && (
+                                    <div className="space-y-4">
+                                        <h2 className="text-xl font-semibold">Services & Process Templates</h2>
+                                        {formData.services.map((service, index) => (
+                                            <div key={`${service.service_id}-${index}`} className="card bg-base-200 p-4">
+                                                <div className="mb-4">
+                                                    <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <h3 className="font-medium text-lg">{service.name}</h3>
+                                                            <p className="text-sm opacity-70">Package: {service.package_name}</p>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <span className="badge badge-outline">{service.category}</span>
+                                                            {service.estimated_hours && (
+                                                                <div className="text-sm mt-1">
+                                                                    Total: {service.estimated_hours}h
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {service.description && service.description !== '.' && (
+                                                        <p className="text-sm mt-2">{service.description}</p>
+                                                    )}
+                                                </div>
+
+                                                {/* Display Deliverables */}
+                                                {service.deliverables && service.deliverables.length > 0 && (
+                                                    <div className="mb-4">
+                                                        <h4 className="font-medium mb-2">Deliverables & Tasks</h4>
+                                                        {service.deliverables.map((phase, phaseIndex) => (
+                                                            <div key={phaseIndex} className="card bg-base-100 p-4 mb-2">
+                                                                <h5 className="font-medium mb-2 flex items-center gap-2">
+                                                                    {phase.phase}
+                                                                </h5>
+                                                                <div className="space-y-2 ml-4">
+                                                                    {phase.tasks.map((task, taskIndex) => (
+                                                                        <div key={taskIndex}>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span className="font-medium">{task.name}</span>
+                                                                                {task.estimated_hours && (
+                                                                                    <span className="text-sm opacity-70">
+                                                                                        ({task.estimated_hours}h)
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                            {task.description && (
+                                                                                <p className="text-sm opacity-70 ml-4">{task.description}</p>
+                                                                            )}
+                                                                            {task.sub_tasks && task.sub_tasks.length > 0 && (
+                                                                                <div className="ml-6 space-y-1 mt-1">
+                                                                                    {task.sub_tasks.map((subTask, subIndex) => (
+                                                                                        <div key={subIndex}>
+                                                                                            <div className="flex items-center gap-2">
+                                                                                                <span className="text-sm">{subTask.name}</span>
+                                                                                                {subTask.estimated_hours && (
+                                                                                                    <span className="text-sm opacity-70">
+                                                                                                        ({subTask.estimated_hours}h)
+                                                                                                    </span>
+                                                                                                )}
+                                                                                            </div>
+                                                                                            {subTask.description && (
+                                                                                                <p className="text-sm opacity-70 ml-4">{subTask.description}</p>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                {/* Process Template Selector */}
+                                                {service.process_template_id && (
+                                                    <ProcessTemplateSelector
+                                                        service={service}
+                                                        templates={processTemplates.filter(t => t.service_id === service.service_id)}
+                                                        onSelect={(serviceId, templateId, selectedSteps) => {
+                                                            const updatedServices = [...formData.services]
+                                                            const serviceIndex = updatedServices.findIndex(s => 
+                                                                s.service_id === serviceId && 
+                                                                s.package_id === service.package_id
+                                                            )
+                                                            if (serviceIndex !== -1) {
+                                                                updatedServices[serviceIndex] = {
+                                                                    ...updatedServices[serviceIndex],
+                                                                    process_template_id: templateId,
+                                                                    selected_steps: selectedSteps
+                                                                }
+                                                                setFormData(prev => ({
+                                                                    ...prev,
+                                                                    services: updatedServices
+                                                                }))
+                                                            }
+                                                        }}
+                                                    />
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
 
                                 <div className="card-actions justify-end mt-6">
                                     <button

@@ -67,18 +67,31 @@ export default async function handler(req, res) {
                         description: fullPackage?.description,
                         includedServices: fullPackage?.includedServices?.map(service => {
                             const fullService = services.find(s => s.service_id === service.service_id)
+                            if (!fullService) {
+                                console.log('Service not found:', service.service_id)
+                                return null
+                            }
                             return {
                                 ...service,
-                                name: fullService?.name,
-                                description: fullService?.description,
-                                process_template_id: fullService?.process_template_id,
-                                selected_steps: fullService?.selected_steps
+                                name: fullService.name,
+                                description: fullService.description,
+                                process_template_id: fullService.process_template_id,
+                                selected_steps: fullService.selected_steps || [],
+                                category: fullService.category,
+                                deliverables: fullService.deliverables || [],
+                                estimated_hours: fullService.estimated_hours,
+                                minimum_hours: fullService.minimum_hours,
+                                included_hours: fullService.included_hours,
+                                service_type: fullService.service_type,
+                                billing_type: fullService.billing_type,
+                                base_price: fullService.base_price
                             }
-                        }) || []
+                        }).filter(Boolean) || []
                     }
                 })
 
-                console.log('Returning enhanced contract:', contract)
+                // Log the full contract details without truncation
+                console.log('Returning enhanced contract:', JSON.stringify(contract, null, 2))
                 return res.status(200).json(contract)
 
             default:
