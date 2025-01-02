@@ -8,8 +8,8 @@ export default function TaskDetails() {
   const router = useRouter()
   const { id } = router.query
   const [task, setTask] = useState(null)
-  const [project, setProject] = useState(null)
   const [client, setClient] = useState(null)
+  const [project, setProject] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [editingDescription, setEditingDescription] = useState(false)
@@ -17,42 +17,43 @@ export default function TaskDetails() {
 
   useEffect(() => {
     if (id) {
-      fetchTaskData()
+      fetchTaskDetails()
     }
   }, [id])
 
-  const fetchTaskData = async () => {
+  const fetchTaskDetails = async () => {
     try {
       const taskRes = await fetch(`/api/tasks/${id}`)
-      if (!taskRes.ok) {
-        throw new Error('Failed to fetch task')
-      }
+      if (!taskRes.ok) throw new Error('Failed to fetch task')
       const taskData = await taskRes.json()
       setTask(taskData)
       setDescription(taskData.description || '')
 
-      // Fetch project details if task has project_id
+      // Fetch client details if project_id exists
       if (taskData.project_id) {
         const projectRes = await fetch(`/api/projects/${taskData.project_id}`)
-        if (projectRes.ok) {
-          const projectData = await projectRes.json()
-          setProject(projectData)
+        if (!projectRes.ok) throw new Error('Failed to fetch project')
+        const projectData = await projectRes.json()
+        setProject(projectData)
 
-          // Fetch client details if project has client_id
-          if (projectData.client_id) {
-            const clientRes = await fetch(`/api/clients/${projectData.client_id}`)
-            if (clientRes.ok) {
-              const clientData = await clientRes.json()
-              setClient(clientData)
-            }
+        if (projectData.client_id) {
+          const clientRes = await fetch(`/api/clients/${projectData.client_id}`)
+          if (clientRes.ok) {
+            const clientData = await clientRes.json()
+            setClient(clientData)
           }
         }
       }
     } catch (error) {
+      console.error('Error fetching task details:', error)
       setError(error.message)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleStatusChange = (e) => {
+    updateTaskStatus(e.target.value)
   }
 
   const updateTaskStatus = async (newStatus) => {
@@ -66,7 +67,7 @@ export default function TaskDetails() {
       })
 
       if (response.ok) {
-        await fetchTaskData()
+        await fetchTaskDetails()
       } else {
         throw new Error('Failed to update task status')
       }
@@ -87,7 +88,7 @@ export default function TaskDetails() {
 
       if (response.ok) {
         setEditingDescription(false)
-        await fetchTaskData()
+        await fetchTaskDetails()
       } else {
         throw new Error('Failed to update task description')
       }
@@ -112,30 +113,6 @@ export default function TaskDetails() {
   }
 
   const renderContent = () => {
-    if (loading) {
-      return (
-        <div className="flex justify-center items-center min-h-[200px]">
-          <span className="loading loading-spinner loading-lg"></span>
-        </div>
-      )
-    }
-
-    if (error) {
-      return (
-        <div className="alert alert-error">
-          <span>{error}</span>
-        </div>
-      )
-    }
-
-    if (!task) {
-      return (
-        <div className="alert alert-error">
-          <span>Task not found</span>
-        </div>
-      )
-    }
-
     return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Task Information */}
@@ -158,33 +135,16 @@ export default function TaskDetails() {
                     </div>
                   </div>
                 </div>
-                <div className="dropdown dropdown-end">
-                  <label tabIndex={0} className="btn btn-primary">
-                    Update Status
-                  </label>
-                  <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
-                    <li>
-                      <button onClick={() => updateTaskStatus('pending')}>
-                        Set Pending
-                      </button>
-                    </li>
-                    <li>
-                      <button onClick={() => updateTaskStatus('in-progress')}>
-                        Set In Progress
-                      </button>
-                    </li>
-                    <li>
-                      <button onClick={() => updateTaskStatus('completed')}>
-                        Set Completed
-                      </button>
-                    </li>
-                    <li>
-                      <button onClick={() => updateTaskStatus('blocked')}>
-                        Set Blocked
-                      </button>
-                    </li>
-                  </ul>
-                </div>
+                <select
+                  value={task.status}
+                  onChange={handleStatusChange}
+                  className="select select-bordered"
+                >
+                  <option value="pending">Pending</option>
+                  <option value="in-progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                  <option value="blocked">Blocked</option>
+                </select>
               </div>
 
               <div className="divider"></div>
@@ -286,16 +246,9 @@ export default function TaskDetails() {
                     <h4 className="font-medium mb-2">Client</h4>
                     <p>{client.name}</p>
                     <p className="text-sm text-base-content/70">{client.company}</p>
-                    {client.website && (
-                      <a 
-                        href={client.website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="link link-primary text-sm"
-                      >
-                        Visit Website
-                      </a>
-                    )}
+                    <p className="text-sm text-base-content/70">Domain: {client.domain || 'Not set'}</p>
+                    <p className="text-sm text-base-content/70">Email: {client.contactInfo?.email}</p>
+                    <p className="text-sm text-base-content/70">Phone: {client.contactInfo?.phone}</p>
                   </div>
                 )}
               </div>
@@ -327,13 +280,13 @@ export default function TaskDetails() {
                 <div>
                   <h4 className="font-medium mb-1">Due Date</h4>
                   <p className="text-base-content/70">
-                    {new Date(task.deadline || task.due_date).toLocaleDateString()}
+                    {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'Not set'}
                   </p>
                 </div>
 
                 <div>
                   <h4 className="font-medium mb-1">Estimated Hours</h4>
-                  <p className="text-base-content/70">{task.estimated_hours}</p>
+                  <p className="text-base-content/70">{task.estimated_hours || 'Not set'}</p>
                 </div>
 
                 <div>
@@ -381,18 +334,36 @@ export default function TaskDetails() {
     )
   }
 
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex justify-center items-center min-h-screen">
+          <span className="loading loading-spinner loading-lg"></span>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  if (error || !task) {
+    return (
+      <DashboardLayout>
+        <div className="p-4">
+          <div className="alert alert-error">
+            {error || 'Task not found'}
+          </div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
   return (
     <DashboardLayout>
-      <PageHeader 
-        title="Task Details"
-        actions={
-          <button
-            onClick={() => router.back()}
-            className="btn btn-ghost"
-          >
-            Back
-          </button>
-        }
+      <PageHeader
+        title={task?.title || 'Task Details'}
+        breadcrumbs={[
+          { label: 'Tasks', href: '/tasks' },
+          { label: task?.title || 'Task Details', href: `/tasks/${id}` }
+        ]}
       />
       <ContentContainer>
         {renderContent()}
