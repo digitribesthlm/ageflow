@@ -64,6 +64,11 @@ export default function DashboardLayout({ children }) {
     { path: '/tasks/board', label: 'Task Board', icon: '📋' },
     { path: '/time', label: 'Time Tracking', icon: '⏱️' },
     { path: '/time/reports', label: 'Reports', icon: '📈' },
+    { 
+      path: '/calendar', 
+      label: 'Calendar', 
+      icon: '📅'
+    },
   ];
 
   const isActive = (path) => router.pathname === path;
