@@ -12,6 +12,8 @@ export default function EmployeeDetails() {
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [selectedTask, setSelectedTask] = useState(null)
+  const [showTaskModal, setShowTaskModal] = useState(false)
 
   useEffect(() => {
     const user = localStorage.getItem('user')
@@ -67,6 +69,31 @@ export default function EmployeeDetails() {
       default:
         return 'badge-ghost'
     }
+  }
+
+  const updateTaskStatus = async (taskId, newStatus) => {
+    try {
+      const response = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: newStatus }),
+      })
+
+      if (response.ok) {
+        await fetchEmployeeData()
+        setShowTaskModal(false)
+      } else {
+        throw new Error('Failed to update task status')
+      }
+    } catch (error) {
+      setError(error.message)
+    }
+  }
+
+  const handleTaskClick = (task) => {
+    router.push(`/tasks/${task.task_id}`)
   }
 
   const renderContent = () => {
@@ -234,7 +261,11 @@ export default function EmployeeDetails() {
                   </thead>
                   <tbody>
                     {tasks.map((task) => (
-                      <tr key={task.task_id} className="hover">
+                      <tr 
+                        key={task.task_id} 
+                        className="hover cursor-pointer"
+                        onClick={() => handleTaskClick(task)}
+                      >
                         <td>
                           <div>
                             <div className="font-medium">{task.title}</div>

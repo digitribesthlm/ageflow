@@ -11,11 +11,29 @@ export default async function handler(req, res) {
     const { db } = await connectToDatabase()
     const { id } = req.query
 
+    console.log('Task API request:', {
+      method: req.method,
+      taskId: id,
+      url: req.url
+    })
+
     if (!id) {
       return res.status(400).json({ message: 'Task ID is required' })
     }
 
     switch (req.method) {
+      case 'GET':
+        console.log('Fetching task with ID:', id)
+        const task = await db.collection('agency_tasks').findOne({ task_id: id })
+        
+        console.log('Task fetch result:', task ? 'Found' : 'Not found')
+        
+        if (!task) {
+          return res.status(404).json({ message: 'Task not found' })
+        }
+
+        return res.status(200).json(task)
+
       case 'PUT':
         const { status, assigned_to, priority, due_date } = req.body
         const updateFields = {}
@@ -29,10 +47,20 @@ export default async function handler(req, res) {
         // Always update the updated_at timestamp
         updateFields.updated_at = new Date()
 
+        console.log('Updating task:', {
+          taskId: id,
+          updateFields
+        })
+
         const result = await db.collection('agency_tasks').updateOne(
           { task_id: id },
           { $set: updateFields }
         )
+
+        console.log('Update result:', {
+          matchedCount: result.matchedCount,
+          modifiedCount: result.modifiedCount
+        })
 
         if (result.matchedCount === 0) {
           return res.status(404).json({ message: 'Task not found' })
@@ -41,7 +69,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ message: 'Task updated successfully' })
 
       default:
-        res.setHeader('Allow', ['PUT'])
+        res.setHeader('Allow', ['GET', 'PUT'])
         return res.status(405).json({ message: `Method ${req.method} Not Allowed` })
     }
   } catch (error) {
