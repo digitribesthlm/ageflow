@@ -134,96 +134,7 @@ export default function TaskBoard() {
   }
 
   const handleTaskClick = (task) => {
-    setSelectedTask(task)
-    modalRef.current?.showModal()
-  }
-
-  const renderTaskModal = () => {
-    if (!selectedTask) return null
-
-    const project = projects.find(p => p.project_id === selectedTask.project_id)
-    const assignee = employees.find(e => e.employee_id === selectedTask.assigned_to)
-
-    return (
-      <dialog ref={modalRef} className="modal">
-        <div className="modal-box w-11/12 max-w-3xl">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h3 className="text-lg font-bold">{selectedTask.title}</h3>
-              <p className="text-sm text-base-content/70">
-                in {project?.name || 'Unknown Project'}
-              </p>
-            </div>
-            <div className={`badge ${getStatusColor(selectedTask.status)}`}>
-              {selectedTask.status}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
-              <h4 className="font-medium mb-2">Details</h4>
-              <div className="bg-base-200 rounded-lg p-4 space-y-2">
-                <p className="text-sm">
-                  <span className="font-medium">Priority:</span>{' '}
-                  <span className={getPriorityColor(selectedTask.priority).replace('border-l-4 ', 'text-')}>
-                    {selectedTask.priority}
-                  </span>
-                </p>
-                <p className="text-sm">
-                  <span className="font-medium">Due Date:</span>{' '}
-                  {new Date(selectedTask.due_date).toLocaleDateString()}
-                </p>
-                <p className="text-sm">
-                  <span className="font-medium">Estimated Hours:</span>{' '}
-                  {selectedTask.estimated_hours}h
-                </p>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="font-medium mb-2">Assignment</h4>
-              <div className="bg-base-200 rounded-lg p-4 space-y-2">
-                {assignee ? (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <div className="avatar placeholder">
-                        <div className="bg-neutral text-neutral-content rounded-full w-8">
-                          <span>{assignee.name.charAt(0)}</span>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="font-medium">{assignee.name}</p>
-                        <p className="text-sm text-base-content/70">{assignee.role || 'Team Member'}</p>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-sm text-base-content/70">Unassigned</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="mb-6">
-            <h4 className="font-medium mb-2">Description</h4>
-            <div className="bg-base-200 rounded-lg p-4">
-              <p className="text-sm whitespace-pre-wrap">
-                {selectedTask.description || 'No description provided.'}
-              </p>
-            </div>
-          </div>
-
-          <div className="modal-action">
-            <form method="dialog">
-              <button className="btn">Close</button>
-            </form>
-          </div>
-        </div>
-        <form method="dialog" className="modal-backdrop">
-          <button>close</button>
-        </form>
-      </dialog>
-    )
+    router.push(`/tasks/${task.task_id}`)
   }
 
   const renderTaskColumn = (title, status, bgColor = 'bg-base-200') => {
@@ -314,8 +225,6 @@ export default function TaskBoard() {
           {renderTaskColumn('Completed', 'completed', 'bg-success/10')}
           {renderTaskColumn('Blocked', 'blocked', 'bg-error/10')}
         </div>
-
-        {renderTaskModal()}
       </ContentContainer>
     </DashboardLayout>
   )
