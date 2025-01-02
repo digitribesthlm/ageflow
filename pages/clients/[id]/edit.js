@@ -14,6 +14,7 @@ export default function EditClient() {
     company: '',
     email: '',
     phone: '',
+    domain: '',
     address: '',
     notes: ''
   })
@@ -125,6 +126,21 @@ export default function EditClient() {
                   value={client.name}
                   onChange={handleChange}
                   className="input input-bordered"
+                  required
+                />
+              </div>
+
+              <div className="form-control mb-4">
+                <label className="label">
+                  <span className="label-text">Domain</span>
+                </label>
+                <input
+                  type="text"
+                  name="domain"
+                  value={client.domain}
+                  onChange={handleChange}
+                  className="input input-bordered"
+                  placeholder="e.g., example.com"
                   required
                 />
               </div>

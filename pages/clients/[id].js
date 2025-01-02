@@ -100,6 +100,10 @@ export default function ClientDetails() {
                   <p>{client.industry}</p>
                 </div>
                 <div>
+                  <label className="text-sm font-medium">Domain</label>
+                  <p>{client.domain || 'Not set'}</p>
+                </div>
+                <div>
                   <label className="text-sm font-medium">Contact Email</label>
                   <p>{client.contactInfo?.email}</p>
                 </div>

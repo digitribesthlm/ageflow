@@ -11,6 +11,7 @@ export default function NewClient() {
     name: '',
     company: '',
     industry: '',
+    domain: '',
     contactInfo: {
       email: '',
       phone: ''
@@ -94,6 +95,20 @@ export default function NewClient() {
                 className="input input-bordered w-full"
                 value={formData.company}
                 onChange={(e) => setFormData({...formData, company: e.target.value})}
+                required
+              />
+            </div>
+
+            <div className="form-control w-full">
+              <label className="label">
+                <span className="label-text font-medium">Domain</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Enter company domain (e.g., example.com)"
+                className="input input-bordered w-full"
+                value={formData.domain}
+                onChange={(e) => setFormData({...formData, domain: e.target.value})}
                 required
               />
             </div>
