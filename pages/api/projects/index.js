@@ -19,6 +19,85 @@ export default async function handler(req, res) {
                     return res.status(200).json(projects)
                 }
 
+                if (action === 'fetch_details') {
+                    const { project_id } = req.body
+                    if (!project_id) {
+                        return res.status(400).json({ message: 'Project ID is required' })
+                    }
+
+                    // Fetch project
+                    const project = await db.collection('agency_projects')
+                        .findOne({ project_id, active: true })
+
+                    if (!project) {
+                        return res.status(404).json({ message: 'Project not found' })
+                    }
+
+                    // Fetch process instances
+                    const processInstances = await db.collection('agency_process_instances')
+                        .find({ 
+                            project_id,
+                            active: true
+                        })
+                        .toArray()
+
+                    // Get all employee IDs from process instances
+                    const employeeIds = new Set()
+                    processInstances.forEach(instance => {
+                        instance.phases.forEach(phase => {
+                            if (phase.assigned_to) employeeIds.add(phase.assigned_to)
+                            phase.tasks.forEach(task => {
+                                if (task.assigned_to) employeeIds.add(task.assigned_to)
+                            })
+                        })
+                    })
+
+                    // Fetch employee details
+                    const employees = await db.collection('agency_employees')
+                        .find({ 
+                            employee_id: { $in: Array.from(employeeIds) }
+                        })
+                        .project({
+                            employee_id: 1,
+                            name: 1,
+                            role: 1
+                        })
+                        .toArray()
+
+                    // Create employee lookup map
+                    const employeeMap = employees.reduce((acc, emp) => {
+                        acc[emp.employee_id] = emp
+                        return acc
+                    }, {})
+
+                    // Enhance process instances with employee details
+                    const enhancedInstances = processInstances.map(instance => ({
+                        ...instance,
+                        phases: instance.phases.map(phase => ({
+                            ...phase,
+                            assigned_to: phase.assigned_to ? {
+                                id: phase.assigned_to,
+                                ...employeeMap[phase.assigned_to]
+                            } : null,
+                            tasks: phase.tasks.map(task => ({
+                                ...task,
+                                assigned_to: task.assigned_to ? {
+                                    id: task.assigned_to,
+                                    ...employeeMap[task.assigned_to]
+                                } : null
+                            }))
+                        }))
+                    }))
+
+                    console.log('Found project:', project)
+                    console.log('Found process instances with employee details:', enhancedInstances)
+
+                    return res.status(200).json({
+                        project,
+                        processInstances: enhancedInstances
+                    })
+                }
+
                 // Handle create action
                 const { 
                     name, 
