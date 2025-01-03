@@ -59,6 +59,7 @@ export default function DashboardLayout({ children }) {
     { path: '/clients', label: 'Clients', icon: '👥' },
     { path: '/services', label: 'Services', icon: '🛠️' },
     { path: '/service-packages', label: 'Service Packages', icon: '📦' },
+    { path: '/process-templates', label: 'Process Templates', icon: '📋' },
     { path: '/contracts', label: 'Contracts', icon: '📝' },
     { path: '/projects', label: 'Projects', icon: '📁' },
     { path: '/employees', label: 'Employees', icon: '👨‍💼' },

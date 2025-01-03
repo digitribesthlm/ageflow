@@ -17,6 +17,49 @@ export default async function handler(req, res) {
                     return res.status(200).json(templates)
                 }
 
+                if (action === 'fetch_details') {
+                    const { template_id } = req.body
+                    
+                    if (!template_id) {
+                        return res.status(400).json({ message: 'Template ID is required' })
+                    }
+
+                    const template = await db.collection('agency_process_templates')
+                        .findOne({ template_id, active: true })
+
+                    if (!template) {
+                        return res.status(404).json({ message: 'Template not found' })
+                    }
+
+                    return res.status(200).json(template)
+                }
+
+                if (action === 'update') {
+                    const { template } = req.body
+                    
+                    if (!template || !template.template_id) {
+                        return res.status(400).json({ message: 'Invalid template data' })
+                    }
+
+                    const { _id, ...templateWithoutId } = template
+
+                    const result = await db.collection('agency_process_templates').updateOne(
+                        { template_id: template.template_id },
+                        { 
+                            $set: {
+                                ...templateWithoutId,
+                                updated_at: new Date()
+                            }
+                        }
+                    )
+
+                    if (result.matchedCount === 0) {
+                        return res.status(404).json({ message: 'Template not found' })
+                    }
+
+                    return res.status(200).json({ message: 'Template updated successfully' })
+                }
+
                 return res.status(400).json({ message: 'Invalid action' })
 
             default:
