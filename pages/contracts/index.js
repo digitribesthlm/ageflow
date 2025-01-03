@@ -16,7 +16,13 @@ export default function Contracts() {
 
     const fetchContracts = async () => {
         try {
-            const response = await fetch('/api/contracts');
+            const response = await fetch('/api/contracts', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ action: 'fetch' })
+            });
             if (response.ok) {
                 const data = await response.json();
                 setContracts(data || []);

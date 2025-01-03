@@ -24,78 +24,84 @@ export default async function handler(req, res) {
         }
 
         switch (req.method) {
-            case 'GET':
-                console.log('Fetching contract:', id)
-                const contract = await db.collection('agency_contracts')
-                    .findOne({ contract_id: id })
+            case 'POST':
+                const { action } = req.body
 
-                console.log('Found contract:', contract)
+                if (action === 'fetch_details') {
+                    console.log('Fetching contract:', id)
+                    const contract = await db.collection('agency_contracts')
+                        .findOne({ contract_id: id })
 
-                if (!contract) {
-                    console.log('Contract not found:', id)
-                    return res.status(404).json({ message: 'Contract not found' })
+                    console.log('Found contract:', contract)
+
+                    if (!contract) {
+                        console.log('Contract not found:', id)
+                        return res.status(404).json({ message: 'Contract not found' })
+                    }
+
+                    // Get package details first
+                    const packageIds = contract.packages?.map(pkg => pkg.package_id) || []
+                    console.log('Looking up packages:', packageIds)
+
+                    const packageDetails = await db.collection('agency_service_packages')
+                        .find({ package_id: { $in: packageIds } })
+                        .toArray()
+
+                    console.log('Found packages:', packageDetails)
+
+                    // Get all service IDs from the packages
+                    const serviceIds = packageDetails
+                        .flatMap(pkg => pkg.includedServices?.map(s => s.service_id) || [])
+
+                    console.log('Looking up services:', serviceIds)
+
+                    const services = await db.collection('agency_services')
+                        .find({ service_id: { $in: serviceIds } })
+                        .toArray()
+
+                    console.log('Found services:', services)
+
+                    // Enhance the contract packages with full package and service details
+                    contract.packages = (contract.packages || []).map(contractPkg => {
+                        const fullPackage = packageDetails.find(p => p.package_id === contractPkg.package_id)
+                        return {
+                            ...contractPkg,
+                            name: fullPackage?.name,
+                            description: fullPackage?.description,
+                            includedServices: fullPackage?.includedServices?.map(service => {
+                                const fullService = services.find(s => s.service_id === service.service_id)
+                                if (!fullService) {
+                                    console.log('Service not found:', service.service_id)
+                                    return null
+                                }
+                                return {
+                                    ...service,
+                                    name: fullService.name,
+                                    description: fullService.description,
+                                    process_template_id: fullService.process_template_id,
+                                    selected_steps: fullService.selected_steps || [],
+                                    category: fullService.category,
+                                    deliverables: fullService.deliverables || [],
+                                    estimated_hours: fullService.estimated_hours,
+                                    minimum_hours: fullService.minimum_hours,
+                                    included_hours: fullService.included_hours,
+                                    service_type: fullService.service_type,
+                                    billing_type: fullService.billing_type,
+                                    base_price: fullService.base_price
+                                }
+                            }).filter(Boolean) || []
+                        }
+                    })
+
+                    // Log the full contract details without truncation
+                    console.log('Returning enhanced contract:', JSON.stringify(contract, null, 2))
+                    return res.status(200).json(contract)
                 }
 
-                // Get package details first
-                const packageIds = contract.packages?.map(pkg => pkg.package_id) || []
-                console.log('Looking up packages:', packageIds)
-
-                const packageDetails = await db.collection('agency_service_packages')
-                    .find({ package_id: { $in: packageIds } })
-                    .toArray()
-
-                console.log('Found packages:', packageDetails)
-
-                // Get all service IDs from the packages
-                const serviceIds = packageDetails
-                    .flatMap(pkg => pkg.includedServices?.map(s => s.service_id) || [])
-
-                console.log('Looking up services:', serviceIds)
-
-                const services = await db.collection('agency_services')
-                    .find({ service_id: { $in: serviceIds } })
-                    .toArray()
-
-                console.log('Found services:', services)
-
-                // Enhance the contract packages with full package and service details
-                contract.packages = (contract.packages || []).map(contractPkg => {
-                    const fullPackage = packageDetails.find(p => p.package_id === contractPkg.package_id)
-                    return {
-                        ...contractPkg,
-                        name: fullPackage?.name,
-                        description: fullPackage?.description,
-                        includedServices: fullPackage?.includedServices?.map(service => {
-                            const fullService = services.find(s => s.service_id === service.service_id)
-                            if (!fullService) {
-                                console.log('Service not found:', service.service_id)
-                                return null
-                            }
-                            return {
-                                ...service,
-                                name: fullService.name,
-                                description: fullService.description,
-                                process_template_id: fullService.process_template_id,
-                                selected_steps: fullService.selected_steps || [],
-                                category: fullService.category,
-                                deliverables: fullService.deliverables || [],
-                                estimated_hours: fullService.estimated_hours,
-                                minimum_hours: fullService.minimum_hours,
-                                included_hours: fullService.included_hours,
-                                service_type: fullService.service_type,
-                                billing_type: fullService.billing_type,
-                                base_price: fullService.base_price
-                            }
-                        }).filter(Boolean) || []
-                    }
-                })
-
-                // Log the full contract details without truncation
-                console.log('Returning enhanced contract:', JSON.stringify(contract, null, 2))
-                return res.status(200).json(contract)
+                return res.status(400).json({ message: 'Invalid action' })
 
             default:
-                res.setHeader('Allow', ['GET'])
+                res.setHeader('Allow', ['POST'])
                 return res.status(405).json({ message: `Method ${req.method} Not Allowed` })
         }
     } catch (error) {

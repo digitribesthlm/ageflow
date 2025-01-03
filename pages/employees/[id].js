@@ -28,29 +28,21 @@ export default function EmployeeDetails() {
 
   const fetchEmployeeData = async () => {
     try {
-      // Fetch employee details
-      const employeeRes = await fetch(`/api/employees/${id}`)
+      // Fetch employee details with projects and tasks
+      const employeeRes = await fetch(`/api/employees/${id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action: 'fetch_details' })
+      })
       if (!employeeRes.ok) {
         throw new Error('Failed to fetch employee')
       }
       const employeeData = await employeeRes.json()
       setEmployee(employeeData)
-
-      // Fetch employee's projects
-      if (employeeData.current_projects?.length > 0) {
-        const projectPromises = employeeData.current_projects.map(projectId =>
-          fetch(`/api/projects/${projectId}`).then(res => res.json())
-        )
-        const projectsData = await Promise.all(projectPromises)
-        setProjects(projectsData)
-      }
-
-      // Fetch employee's tasks
-      const tasksRes = await fetch(`/api/tasks?assigned_to=${id}`)
-      if (tasksRes.ok) {
-        const tasksData = await tasksRes.json()
-        setTasks(tasksData)
-      }
+      setProjects(employeeData.current_projects || [])
+      setTasks(employeeData.assigned_tasks || [])
     } catch (error) {
       setError(error.message)
     } finally {

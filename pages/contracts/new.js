@@ -30,16 +30,18 @@ export default function NewContract() {
             // Fetch clients and service packages
             const [clientsRes, packagesRes] = await Promise.all([
                 fetch('/api/clients', {
-                    credentials: 'include',
+                    method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
-                    }
+                    },
+                    body: JSON.stringify({ action: 'fetch' })
                 }),
                 fetch('/api/service-packages', {
-                    credentials: 'include',
+                    method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
-                    }
+                    },
+                    body: JSON.stringify({ action: 'fetch' })
                 })
             ]);
 
