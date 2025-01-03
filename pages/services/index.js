@@ -21,7 +21,16 @@ export default function Services() {
 
   const fetchServices = async () => {
     try {
-      const response = await fetch('/api/services')
+      const response = await fetch('/api/services', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'fetch'
+        }),
+      })
+      
       if (response.ok) {
         const data = await response.json()
         setServices(data || [])
