@@ -80,32 +80,34 @@ export default function Clients() {
         <table className="table table-zebra w-full">
           <thead>
             <tr>
+              <th className="bg-base-200 text-base font-semibold">Name</th>
               <th className="bg-base-200 text-base font-semibold">Company</th>
-              <th className="bg-base-200 text-base font-semibold">Contact</th>
-              <th className="bg-base-200 text-base font-semibold">Industry</th>
               <th className="bg-base-200 text-base font-semibold">Email</th>
               <th className="bg-base-200 text-base font-semibold">Phone</th>
+              <th className="bg-base-200 text-base font-semibold">Address</th>
               <th className="bg-base-200 text-base font-semibold text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {clients.map((client) => (
-              <tr key={client._id} className="hover:bg-base-200">
-                <td className="font-medium">{client.company}</td>
-                <td>{client.name}</td>
-                <td>{client.industry}</td>
-                <td>{client.contactInfo?.email}</td>
-                <td>{client.contactInfo?.phone}</td>
-                <td className="text-right">
-                  <button
-                    onClick={() => router.push(`/clients/${client.client_id}`)}
-                    className="btn btn-primary btn-sm"
-                  >
-                    View Details
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {clients
+              .filter(client => client && client.name)
+              .map((client) => (
+                <tr key={client.client_id} className="hover:bg-base-200">
+                  <td className="font-medium">{client.name}</td>
+                  <td>{client.company || '-'}</td>
+                  <td>{client.email || '-'}</td>
+                  <td>{client.phone || '-'}</td>
+                  <td>{client.address || '-'}</td>
+                  <td className="text-right">
+                    <button
+                      onClick={() => router.push(`/clients/${client.client_id}`)}
+                      className="btn btn-primary btn-sm"
+                    >
+                      View Details
+                    </button>
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>

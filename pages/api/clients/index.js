@@ -10,11 +10,28 @@ export default async function handler(req, res) {
 
                 if (action === 'fetch') {
                     const clients = await db.collection('agency_clients')
-                        .find({ active: true })
+                        .find({ 
+                            active: true,
+                            name: { $exists: true, $ne: '' }  // Only get clients with valid names
+                        })
                         .sort({ created_at: -1 })
                         .toArray()
 
-                    return res.status(200).json(clients)
+                    // Filter out any invalid entries and format the response
+                    const validClients = clients
+                        .filter(client => client.name && client.name.trim())  // Ensure name exists and isn't just whitespace
+                        .map(client => ({
+                            client_id: client.client_id,
+                            name: client.name.trim(),
+                            company: client.company?.trim() || null,
+                            email: client.email?.trim() || null,
+                            phone: client.phone?.trim() || null,
+                            address: client.address?.trim() || null,
+                            created_at: client.created_at,
+                            updated_at: client.updated_at
+                        }))
+
+                    return res.status(200).json(validClients)
                 }
 
                 if (action === 'create') {
