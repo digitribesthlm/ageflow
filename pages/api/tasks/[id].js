@@ -2,79 +2,76 @@ import { connectToDatabase } from '../../../utils/mongodb'
 
 export default async function handler(req, res) {
   try {
-    // Check auth token from cookie
-    const authToken = req.cookies['auth-token']
-    if (!authToken) {
-      return res.status(401).json({ message: 'Unauthorized' })
-    }
-
     const { db } = await connectToDatabase()
     const { id } = req.query
 
-    console.log('Task API request:', {
-      method: req.method,
-      taskId: id,
-      url: req.url
-    })
+    if (req.method === 'GET') {
+      // Fetch task
+      const task = await db.collection('agency_tasks')
+        .findOne({ task_id: id })
 
-    if (!id) {
-      return res.status(400).json({ message: 'Task ID is required' })
+      if (!task) {
+        return res.status(404).json({ message: 'Task not found' })
+      }
+
+      // Fetch process instance to get template_id
+      const processInstance = await db.collection('agency_process_instances')
+        .findOne({ instance_id: task.process_instance_id })
+
+      if (processInstance?.template_id) {
+        // Fetch process template
+        const processTemplate = await db.collection('agency_process_templates')
+          .findOne({ template_id: processInstance.template_id })
+
+        if (processTemplate) {
+          // Find the specific task template from the process template
+          const step = processTemplate.steps.find(s => s.name === task.phase_name)
+          const taskTemplate = step?.tasks.find(t => t.name === task.name)
+
+          // Enhance task with template information
+          const enhancedTask = {
+            ...task,
+            template_info: {
+              process_name: processTemplate.name,
+              process_category: processTemplate.category,
+              process_version: processTemplate.version,
+              required_tools: taskTemplate?.required_tools || [],
+              deliverables: taskTemplate?.deliverables || [],
+              instruction_doc: taskTemplate?.instruction_doc,
+              sub_tasks: taskTemplate?.sub_tasks || []
+            }
+          }
+
+          return res.status(200).json(enhancedTask)
+        }
+      }
+
+      // Return task without template info if not found
+      return res.status(200).json(task)
     }
 
-    switch (req.method) {
-      case 'GET':
-        console.log('Fetching task with ID:', id)
-        const task = await db.collection('agency_tasks').findOne({ task_id: id })
-        
-        console.log('Task fetch result:', task ? 'Found' : 'Not found')
-        
-        if (!task) {
-          return res.status(404).json({ message: 'Task not found' })
-        }
+    // Handle PUT request for updating task
+    if (req.method === 'PUT') {
+      const updates = req.body
+      delete updates._id // Remove MongoDB _id if present
 
-        return res.status(200).json(task)
+      const result = await db.collection('agency_tasks').updateOne(
+        { task_id: id },
+        { $set: { ...updates, updated_at: new Date() } }
+      )
 
-      case 'PUT':
-        const { status, assigned_to, priority, due_date, description } = req.body
-        const updateFields = {}
+      if (result.matchedCount === 0) {
+        return res.status(404).json({ message: 'Task not found' })
+      }
 
-        // Add fields to update only if they are provided
-        if (status) updateFields.status = status
-        if (assigned_to) updateFields.assigned_to = assigned_to
-        if (priority) updateFields.priority = priority
-        if (due_date) updateFields.due_date = new Date(due_date)
-        if (description !== undefined) updateFields.description = description
-
-        // Always update the updated_at timestamp
-        updateFields.updated_at = new Date()
-
-        console.log('Updating task:', {
-          taskId: id,
-          updateFields
-        })
-
-        const result = await db.collection('agency_tasks').updateOne(
-          { task_id: id },
-          { $set: updateFields }
-        )
-
-        console.log('Update result:', {
-          matchedCount: result.matchedCount,
-          modifiedCount: result.modifiedCount
-        })
-
-        if (result.matchedCount === 0) {
-          return res.status(404).json({ message: 'Task not found' })
-        }
-
-        return res.status(200).json({ message: 'Task updated successfully' })
-
-      default:
-        res.setHeader('Allow', ['GET', 'PUT'])
-        return res.status(405).json({ message: `Method ${req.method} Not Allowed` })
+      return res.status(200).json({ message: 'Task updated successfully' })
     }
+
+    res.setHeader('Allow', ['GET', 'PUT'])
+    return res.status(405).json({ message: `Method ${req.method} Not Allowed` })
+
   } catch (error) {
     console.error('Task API error:', error)
-    res.status(500).json({ message: 'Internal server error' })
+    return res.status(500).json({ message: 'Internal server error' })
   }
 } 

@@ -251,6 +251,78 @@ export default function TaskDetails() {
                     </ul>
                   </div>
                 )}
+
+                {task.template_info && (
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="font-medium mb-2">Process Information</h3>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm font-medium">Process Name</p>
+                          <p className="text-base-content/70">{task.template_info.process_name}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Category</p>
+                          <p className="text-base-content/70">{task.template_info.process_category}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Version</p>
+                          <p className="text-base-content/70">{task.template_info.process_version}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {task.template_info.required_tools?.length > 0 && (
+                      <div>
+                        <h3 className="font-medium mb-2">Required Tools</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {task.template_info.required_tools.map((tool, index) => (
+                            <div key={index} className="badge badge-outline">{tool}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {task.template_info.deliverables?.length > 0 && (
+                      <div>
+                        <h3 className="font-medium mb-2">Deliverables</h3>
+                        <ul className="list-disc list-inside space-y-1 text-base-content/70">
+                          {task.template_info.deliverables.map((deliverable, index) => (
+                            <li key={index}>{deliverable}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {task.template_info.instruction_doc && (
+                      <div>
+                        <h3 className="font-medium mb-2">Instructions Document</h3>
+                        <a 
+                          href={task.template_info.instruction_doc.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="link link-primary flex items-center gap-2"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                          {task.template_info.instruction_doc.title}
+                        </a>
+                      </div>
+                    )}
+
+                    {task.template_info.sub_tasks?.length > 0 && (
+                      <div>
+                        <h3 className="font-medium mb-2">Sub-Tasks</h3>
+                        <ul className="list-disc list-inside space-y-1 text-base-content/70">
+                          {task.template_info.sub_tasks.map((subTask, index) => (
+                            <li key={index}>{subTask.name}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
