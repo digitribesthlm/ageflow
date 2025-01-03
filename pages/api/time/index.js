@@ -13,8 +13,33 @@ export default async function handler(req, res) {
     switch (req.method) {
       case 'GET':
         const timeEntries = await db.collection('agency_time_tracking')
-          .find({})
-          .sort({ date: -1 })
+          .aggregate([
+            {
+              $lookup: {
+                from: 'agency_employees',
+                localField: 'employee_id',
+                foreignField: 'employee_id',
+                as: 'employee'
+              }
+            },
+            {
+              $lookup: {
+                from: 'agency_projects',
+                localField: 'project_id',
+                foreignField: 'project_id',
+                as: 'project'
+              }
+            },
+            {
+              $addFields: {
+                employee_name: { $arrayElemAt: ['$employee.name', 0] },
+                project_name: { $arrayElemAt: ['$project.name', 0] }
+              }
+            },
+            {
+              $sort: { date: -1 }
+            }
+          ])
           .toArray()
         return res.status(200).json(timeEntries)
 

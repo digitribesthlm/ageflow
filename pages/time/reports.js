@@ -32,14 +32,26 @@ export default function TimeReports() {
       setTimeEntries(timeData)
 
       // Fetch projects
-      const projectsResponse = await fetch('/api/projects')
+      const projectsResponse = await fetch('/api/projects', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action: 'fetch' })
+      })
       const projectsData = await projectsResponse.json()
-      setProjects(projectsData)
+      setProjects(projectsData || [])
 
       // Fetch employees
-      const employeesResponse = await fetch('/api/employees')
+      const employeesResponse = await fetch('/api/employees', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action: 'fetch' })
+      })
       const employeesData = await employeesResponse.json()
-      setEmployees(employeesData)
+      setEmployees(employeesData || [])
     } catch (error) {
       console.error('Failed to fetch report data:', error)
     } finally {
@@ -188,10 +200,10 @@ export default function TimeReports() {
                   <tr key={entry.time_entry_id}>
                     <td>{new Date(entry.date).toLocaleDateString()}</td>
                     <td>
-                      {employees.find(e => e.employee_id === entry.employee_id)?.name || entry.employee_id}
+                      {entry.employee_name || 'Unknown Employee'}
                     </td>
                     <td>
-                      {projects.find(p => p.project_id === entry.project_id)?.name || entry.project_id}
+                      {entry.project_name || 'Unknown Project'}
                     </td>
                     <td>{entry.description}</td>
                     <td>{entry.hours}</td>

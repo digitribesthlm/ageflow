@@ -40,6 +40,52 @@ export default async function handler(req, res) {
         return res.status(200).json(tasks || [])
 
       case 'POST':
+        const { action } = req.body
+
+        if (action === 'fetch') {
+          const { project_id } = req.body
+          
+          // Build query based on filters
+          const query = {
+            active: { $ne: false }
+          }
+          if (project_id) {
+            query.project_id = project_id
+          }
+
+          const tasks = await db.collection('agency_tasks')
+            .find(query)
+            .sort({ created_at: -1 })
+            .toArray()
+
+          return res.status(200).json(tasks || [])
+        }
+
+        if (action === 'update') {
+          const { task_id, status } = req.body
+          
+          if (!task_id) {
+            return res.status(400).json({ message: 'Task ID is required' })
+          }
+
+          const result = await db.collection('agency_tasks').updateOne(
+            { task_id },
+            { 
+              $set: { 
+                status,
+                updated_at: new Date()
+              } 
+            }
+          )
+
+          if (result.matchedCount === 0) {
+            return res.status(404).json({ message: 'Task not found' })
+          }
+
+          return res.status(200).json({ message: 'Task updated successfully' })
+        }
+
+        // Handle task creation
         const {
           name,
           status,

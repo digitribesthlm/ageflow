@@ -13,12 +13,15 @@ export default function TimeTracking() {
   const [projects, setProjects] = useState([])
   const [tasks, setTasks] = useState([])
   const [showNewEntryForm, setShowNewEntryForm] = useState(false)
+  const [employees, setEmployees] = useState([])
   const [newEntry, setNewEntry] = useState({
     project_id: '',
     task_id: '',
     hours: '',
     description: '',
-    date: new Date().toISOString().split('T')[0]
+    date: new Date().toISOString().split('T')[0],
+    employee_id: '',
+    complete_task: false
   })
 
   useEffect(() => {
@@ -29,6 +32,7 @@ export default function TimeTracking() {
     }
     fetchTimeEntries()
     fetchProjects()
+    fetchEmployees()
   }, [])
 
   useEffect(() => {
@@ -57,7 +61,13 @@ export default function TimeTracking() {
 
   const fetchProjects = async () => {
     try {
-      const response = await fetch('/api/projects')
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action: 'fetch' })
+      })
       if (response.ok) {
         const data = await response.json()
         setProjects(data || [])
@@ -67,9 +77,36 @@ export default function TimeTracking() {
     }
   }
 
+  const fetchEmployees = async () => {
+    try {
+      const response = await fetch('/api/employees', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action: 'fetch' })
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setEmployees(data || [])
+      }
+    } catch (error) {
+      console.error('Failed to fetch employees:', error)
+    }
+  }
+
   const fetchTasks = async (projectId) => {
     try {
-      const response = await fetch(`/api/tasks?project_id=${projectId}`)
+      const response = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          action: 'fetch',
+          project_id: projectId
+        })
+      })
       if (response.ok) {
         const data = await response.json()
         setTasks(data || [])
@@ -92,20 +129,41 @@ export default function TimeTracking() {
         body: JSON.stringify(newEntry),
       })
 
-      if (response.ok) {
-        setShowNewEntryForm(false)
-        setNewEntry({
-          project_id: '',
-          task_id: '',
-          hours: '',
-          description: '',
-          date: new Date().toISOString().split('T')[0]
-        })
-        await fetchTimeEntries()
-      } else {
+      if (!response.ok) {
         const error = await response.json()
         throw new Error(error.message || 'Failed to create time entry')
       }
+
+      if (newEntry.complete_task && newEntry.task_id) {
+        const taskResponse = await fetch('/api/tasks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'update',
+            task_id: newEntry.task_id,
+            status: 'completed'
+          }),
+        })
+
+        if (!taskResponse.ok) {
+          console.error('Failed to mark task as complete')
+        }
+      }
+
+      setShowNewEntryForm(false)
+      setNewEntry({
+        project_id: '',
+        task_id: '',
+        hours: '',
+        description: '',
+        date: new Date().toISOString().split('T')[0],
+        employee_id: '',
+        complete_task: false
+      })
+      await fetchTimeEntries()
+      
     } catch (error) {
       setError(error.message)
     } finally {
@@ -120,6 +178,25 @@ export default function TimeTracking() {
           <h3 className="card-title">New Time Entry</h3>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="form-control w-full">
+              <label className="label">
+                <span className="label-text font-medium">Employee</span>
+              </label>
+              <select
+                className="select select-bordered w-full"
+                value={newEntry.employee_id}
+                onChange={(e) => setNewEntry({...newEntry, employee_id: e.target.value})}
+                required
+              >
+                <option value="">Select Employee</option>
+                {employees.map((employee) => (
+                  <option key={employee.employee_id} value={employee.employee_id}>
+                    {employee.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="form-control w-full">
               <label className="label">
                 <span className="label-text font-medium">Project</span>
@@ -142,7 +219,9 @@ export default function TimeTracking() {
                 ))}
               </select>
             </div>
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="form-control w-full">
               <label className="label">
                 <span className="label-text font-medium">Task</span>
@@ -157,14 +236,12 @@ export default function TimeTracking() {
                 <option value="">Select Task</option>
                 {tasks.map((task) => (
                   <option key={task.task_id} value={task.task_id}>
-                    {task.title}
+                    {task.title || task.name}
                   </option>
                 ))}
               </select>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="form-control w-full">
               <label className="label">
                 <span className="label-text font-medium">Hours</span>
@@ -179,7 +256,9 @@ export default function TimeTracking() {
                 required
               />
             </div>
+          </div>
 
+          <div className="grid grid-cols-1 gap-4">
             <div className="form-control w-full">
               <label className="label">
                 <span className="label-text font-medium">Date</span>
@@ -192,19 +271,32 @@ export default function TimeTracking() {
                 required
               />
             </div>
-          </div>
 
-          <div className="form-control w-full">
-            <label className="label">
-              <span className="label-text font-medium">Description</span>
-            </label>
-            <textarea
-              placeholder="Enter description"
-              className="textarea textarea-bordered w-full"
-              value={newEntry.description}
-              onChange={(e) => setNewEntry({...newEntry, description: e.target.value})}
-              required
-            />
+            <div className="form-control w-full">
+              <label className="label">
+                <span className="label-text font-medium">Description</span>
+              </label>
+              <textarea
+                placeholder="Enter description"
+                className="textarea textarea-bordered w-full"
+                value={newEntry.description}
+                onChange={(e) => setNewEntry({...newEntry, description: e.target.value})}
+                required
+              />
+            </div>
+
+            <div className="form-control">
+              <label className="label cursor-pointer">
+                <span className="label-text">Mark task as completed</span>
+                <input
+                  type="checkbox"
+                  className="checkbox checkbox-primary"
+                  checked={newEntry.complete_task}
+                  onChange={(e) => setNewEntry({...newEntry, complete_task: e.target.checked})}
+                  disabled={!newEntry.task_id}
+                />
+              </label>
+            </div>
           </div>
 
           <div className="card-actions justify-end mt-4">
