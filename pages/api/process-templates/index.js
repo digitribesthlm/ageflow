@@ -34,6 +34,23 @@ export default async function handler(req, res) {
                     return res.status(200).json(template)
                 }
 
+                if (action === 'create') {
+                    const { template } = req.body
+                    
+                    if (!template || !template.name || !template.steps) {
+                        return res.status(400).json({ message: 'Invalid template data' })
+                    }
+
+                    const result = await db.collection('agency_process_templates')
+                        .insertOne(template)
+
+                    if (!result.acknowledged) {
+                        throw new Error('Failed to create template')
+                    }
+
+                    return res.status(201).json({ message: 'Template created successfully' })
+                }
+
                 if (action === 'update') {
                     const { template } = req.body
                     

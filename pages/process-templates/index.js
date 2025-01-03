@@ -107,6 +107,14 @@ export default function ProcessTemplates() {
         breadcrumbs={[
           { label: 'Process Templates', href: '/process-templates' }
         ]}
+        actions={
+          <button
+            onClick={() => router.push('/process-templates/new')}
+            className="btn btn-primary"
+          >
+            New Process Template
+          </button>
+        }
       />
       <ContentContainer>
         {renderContent()}
