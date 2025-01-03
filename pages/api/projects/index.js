@@ -10,9 +10,17 @@ export default async function handler(req, res) {
 
                 // Handle fetch action
                 if (action === 'fetch') {
+                    const { client_id } = req.body
+                    
+                    // Build query
+                    const query = { active: true }
+                    if (client_id) {
+                        query.client_id = client_id
+                    }
+
                     // First get all projects
                     const projects = await db.collection('agency_projects')
-                        .find({ active: true })
+                        .find(query)
                         .sort({ created_at: -1 })
                         .toArray()
 

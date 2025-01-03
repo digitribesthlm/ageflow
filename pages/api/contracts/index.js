@@ -9,8 +9,16 @@ export default async function handler(req, res) {
                 const { action } = req.body
 
                 if (action === 'fetch') {
+                    const { client_id } = req.body
+                    
+                    // Build query
+                    const query = { active: true }
+                    if (client_id) {
+                        query.client_id = client_id
+                    }
+
                     const contracts = await db.collection('agency_contracts')
-                        .find({ active: true })
+                        .find(query)
                         .sort({ created_at: -1 })
                         .toArray()
                     
