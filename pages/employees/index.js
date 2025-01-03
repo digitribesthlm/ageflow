@@ -21,7 +21,13 @@ export default function Employees() {
 
   const fetchEmployees = async () => {
     try {
-      const response = await fetch('/api/employees')
+      const response = await fetch('/api/employees', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action: 'fetch' })
+      })
       if (response.ok) {
         const data = await response.json()
         setEmployees(data || [])
@@ -104,13 +110,13 @@ export default function Employees() {
                 </td>
                 <td>
                   <div className="flex items-center gap-2">
-                    <div className="radial-progress text-primary" style={{ "--value": (employee.current_projects?.length || 0) / (employee.availability_hours / 40) * 100 }}>
+                    <div className="radial-progress text-primary" style={{ "--value": (employee.project_count || 0) / (employee.availability_hours / 40) * 100 }}>
                       {employee.availability_hours}h
                     </div>
                   </div>
                 </td>
                 <td>
-                  {employee.current_projects?.length || 0} projects
+                  {employee.project_count || 0} projects
                 </td>
                 <td>
                   <div className="flex gap-2">
