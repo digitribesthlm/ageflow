@@ -12,6 +12,36 @@ export default function ProjectDetails() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
 
+    // Helper functions for progress calculation
+    const calculateTotalHours = (instances) => {
+        return instances.reduce((total, instance) => 
+            total + instance.phases.reduce((phaseTotal, phase) => 
+                phaseTotal + phase.tasks.reduce((taskTotal, task) => 
+                    taskTotal + (task.estimated_hours || 0), 0), 0), 0)
+    }
+
+    const calculateCompletedHours = (instances) => {
+        return instances.reduce((total, instance) => 
+            total + instance.phases.reduce((phaseTotal, phase) => 
+                phaseTotal + phase.tasks.reduce((taskTotal, task) => 
+                    taskTotal + (task.status === 'completed' ? (task.estimated_hours || 0) : 0), 0), 0), 0)
+    }
+
+    const calculateProgress = (instances) => {
+        const totalHours = calculateTotalHours(instances)
+        if (totalHours === 0) return 0
+        return Math.round((calculateCompletedHours(instances) / totalHours) * 100)
+    }
+
+    const getProjectStatus = (instances) => {
+        if (!instances || instances.length === 0) return 'planning'
+
+        const progress = calculateProgress(instances)
+        if (progress === 100) return 'completed'
+        if (progress > 0) return 'in-progress'
+        return 'planning'
+    }
+
     useEffect(() => {
         if (id) {
             fetchProjectDetails()
@@ -48,6 +78,37 @@ export default function ProjectDetails() {
         }
     }
 
+    const handleTaskStatusChange = async (instanceId, phaseId, taskId, newStatus) => {
+        try {
+            const response = await fetch('/api/projects', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    action: 'update_task_status',
+                    project_id: id,
+                    instance_id: instanceId,
+                    phase_id: phaseId,
+                    task_id: taskId,
+                    status: newStatus
+                })
+            })
+
+            if (response.ok) {
+                const data = await response.json()
+                console.log('Task status updated:', data)
+                fetchProjectDetails()
+            } else {
+                const errorData = await response.json()
+                setError(errorData.message || 'Failed to update task status')
+            }
+        } catch (error) {
+            console.error('Error updating task status:', error)
+            setError('Error updating task status')
+        }
+    }
+
     const renderContent = () => {
         if (loading) {
             return (
@@ -79,6 +140,25 @@ export default function ProjectDetails() {
                 <div className="card bg-base-100 shadow-xl">
                     <div className="card-body">
                         <h2 className="card-title text-2xl">{project.name}</h2>
+                        
+                        {/* Progress Bar */}
+                        <div className="mt-4">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm font-medium">Overall Progress</span>
+                                <span className="text-sm">{calculateProgress(processInstances)}%</span>
+                            </div>
+                            <div className="w-full bg-base-200 rounded-full h-2.5">
+                                <div 
+                                    className="bg-primary h-2.5 rounded-full transition-all" 
+                                    style={{ width: `${calculateProgress(processInstances)}%` }}
+                                ></div>
+                            </div>
+                            <div className="flex justify-between text-xs mt-1">
+                                <span>{calculateCompletedHours(processInstances)}h completed</span>
+                                <span>{calculateTotalHours(processInstances)}h total</span>
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                             <div>
                                 <p className="text-sm opacity-70">Client ID</p>
@@ -91,7 +171,7 @@ export default function ProjectDetails() {
                                     project.status === 'in-progress' ? 'badge-warning' : 
                                     'badge-info'
                                 } badge-lg`}>
-                                    {project.status}
+                                    {getProjectStatus(processInstances)}
                                 </div>
                             </div>
                             <div>
@@ -167,16 +247,27 @@ export default function ProjectDetails() {
                                                                             </div>
                                                                         )}
                                                                     </div>
-                                                                    <div className="text-right">
-                                                                        <div className={`badge ${
-                                                                            task.status === 'completed' ? 'badge-success' : 
-                                                                            task.status === 'in-progress' ? 'badge-warning' : 
-                                                                            'badge-info'
-                                                                        }`}>
-                                                                            {task.status}
-                                                                        </div>
+                                                                    <div className="text-right space-y-2">
+                                                                        <select
+                                                                            className={`select select-sm ${
+                                                                                task.status === 'completed' ? 'select-success' : 
+                                                                                task.status === 'in-progress' ? 'select-warning' : 
+                                                                                'select-info'
+                                                                            }`}
+                                                                            value={task.status}
+                                                                            onChange={(e) => handleTaskStatusChange(
+                                                                                instance.instance_id,
+                                                                                phase.phase_id,
+                                                                                task.task_id,
+                                                                                e.target.value
+                                                                            )}
+                                                                        >
+                                                                            <option value="pending">Pending</option>
+                                                                            <option value="in-progress">In Progress</option>
+                                                                            <option value="completed">Completed</option>
+                                                                        </select>
                                                                         {task.estimated_hours && (
-                                                                            <div className="text-sm mt-1">
+                                                                            <div className="text-sm">
                                                                                 {task.estimated_hours}h
                                                                             </div>
                                                                         )}

@@ -112,6 +112,51 @@ export default async function handler(req, res) {
                     return res.status(200).json(contract)
                 }
 
+                if (action === 'create') {
+                    const {
+                        client_id,
+                        packages,
+                        start_date,
+                        end_date,
+                        monthly_fee,
+                        billing_frequency,
+                        payment_terms,
+                        contract_type
+                    } = req.body
+
+                    // Validate required fields
+                    if (!client_id || !packages || packages.length === 0 || !monthly_fee || !billing_frequency) {
+                        return res.status(400).json({ 
+                            message: 'Client, packages, monthly fee, and billing frequency are required' 
+                        })
+                    }
+
+                    const newContract = {
+                        contract_id: `CNT${Date.now()}`,
+                        client_id,
+                        packages: packages.map(pkg => ({
+                            package_id: pkg.package_id,
+                            quantity: pkg.quantity || 1
+                        })),
+                        start_date: new Date(start_date),
+                        end_date: end_date ? new Date(end_date) : null,
+                        monthly_fee: parseFloat(monthly_fee),
+                        billing_frequency: billing_frequency,
+                        payment_terms: payment_terms || 'net-30',
+                        contract_type: contract_type || 'recurring',
+                        status: 'active',
+                        active: true,
+                        created_at: new Date(),
+                        updated_at: new Date(),
+                        billing: {
+                            next_billing_date: new Date(start_date)
+                        }
+                    }
+
+                    await db.collection('agency_contracts').insertOne(newContract)
+                    return res.status(201).json(newContract)
+                }
+
                 return res.status(400).json({ message: 'Invalid action' })
 
             default:

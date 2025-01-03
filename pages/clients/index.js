@@ -21,16 +21,23 @@ export default function Clients() {
 
   const fetchClients = async () => {
     try {
-      const response = await fetch('/api/clients')
+      const response = await fetch('/api/clients', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action: 'fetch' })
+      })
+
       if (response.ok) {
         const data = await response.json()
         setClients(data || [])
       } else {
-        const errorData = await response.json()
-        setError(errorData.message || 'Failed to fetch clients')
+        const error = await response.json()
+        throw new Error(error.message || 'Failed to fetch clients')
       }
     } catch (error) {
-      setError('Error fetching clients: ' + error.message)
+      setError(error.message)
     } finally {
       setLoading(false)
     }

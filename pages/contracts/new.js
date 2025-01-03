@@ -18,7 +18,7 @@ export default function NewContract() {
         monthly_fee: '',
         billing_frequency: 'monthly',
         payment_terms: 'net-30',
-        contract_type: 'one-time'
+        contract_type: 'recurring'
     });
 
     useEffect(() => {
@@ -45,9 +45,22 @@ export default function NewContract() {
                 })
             ]);
 
+            // Log responses for debugging
+            console.log('Clients response status:', clientsRes.status);
+            console.log('Packages response status:', packagesRes.status);
+
             if (!clientsRes.ok || !packagesRes.ok) {
-                const errorData = !clientsRes.ok ? await clientsRes.json() : await packagesRes.json();
-                throw new Error(errorData.message || 'Failed to fetch data');
+                // Get the actual error response text
+                const clientsText = !clientsRes.ok ? await clientsRes.text() : '';
+                const packagesText = !packagesRes.ok ? await packagesRes.text() : '';
+                console.error('Clients error:', clientsText);
+                console.error('Packages error:', packagesText);
+                
+                throw new Error(
+                    !clientsRes.ok 
+                        ? `Clients API error: ${clientsText}` 
+                        : `Packages API error: ${packagesText}`
+                );
             }
 
             const [clientsData, packagesData] = await Promise.all([
@@ -55,9 +68,13 @@ export default function NewContract() {
                 packagesRes.json()
             ]);
 
-            setClients(clientsData);
-            setPackages(packagesData);
+            console.log('Fetched clients:', clientsData?.length);
+            console.log('Fetched packages:', packagesData?.length);
+
+            setClients(clientsData || []);
+            setPackages(packagesData || []);
         } catch (error) {
+            console.error('Full error:', error);
             setError('Error fetching data: ' + error.message);
         }
     };
@@ -73,15 +90,20 @@ export default function NewContract() {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(formData),
+                body: JSON.stringify({
+                    action: 'create',
+                    ...formData,
+                    monthly_fee: parseFloat(formData.monthly_fee)
+                }),
             });
 
-            if (response.ok) {
-                router.push('/contracts');
-            } else {
+            if (!response.ok) {
                 const data = await response.json();
-                setError(data.message || 'Failed to create contract');
+                throw new Error(data.message || 'Failed to create contract');
             }
+
+            const contract = await response.json();
+            router.push(`/contracts/${contract.contract_id}`);
         } catch (error) {
             setError('Error creating contract: ' + error.message);
         } finally {
@@ -147,7 +169,7 @@ export default function NewContract() {
                                     <option value="">Select Client</option>
                                     {clients.map(client => (
                                         <option key={client.client_id} value={client.client_id}>
-                                            {client.company} ({client.name})
+                                            {client.displayName || `${client.company} (${client.name})`}
                                         </option>
                                     ))}
                                 </select>
@@ -253,9 +275,10 @@ export default function NewContract() {
                                     value={formData.monthly_fee}
                                     onChange={handleChange}
                                     className="input input-bordered"
-                                    placeholder="0.00"
-                                    step="0.01"
+                                    placeholder="Enter monthly fee"
                                     required
+                                    min="0"
+                                    step="0.01"
                                 />
                             </div>
 
@@ -272,6 +295,7 @@ export default function NewContract() {
                                 >
                                     <option value="monthly">Monthly</option>
                                     <option value="quarterly">Quarterly</option>
+                                    <option value="semi-annual">Semi-Annual</option>
                                     <option value="annual">Annual</option>
                                 </select>
                             </div>
@@ -290,11 +314,12 @@ export default function NewContract() {
                                     <option value="net-15">Net 15</option>
                                     <option value="net-30">Net 30</option>
                                     <option value="net-45">Net 45</option>
+                                    <option value="net-60">Net 60</option>
                                 </select>
                             </div>
                         </div>
 
-                        <div className="flex justify-end space-x-4">
+                        <div className="flex justify-end gap-4">
                             <button
                                 type="button"
                                 onClick={() => router.back()}
@@ -308,10 +333,7 @@ export default function NewContract() {
                                 disabled={loading}
                             >
                                 {loading ? (
-                                    <>
-                                        <span className="loading loading-spinner loading-sm"></span>
-                                        Creating...
-                                    </>
+                                    <span className="loading loading-spinner"></span>
                                 ) : (
                                     'Create Contract'
                                 )}

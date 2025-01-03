@@ -29,14 +29,32 @@ export default function ClientDetails() {
       setClient(clientData)
 
       // Fetch client's projects
-      const projectsRes = await fetch(`/api/projects?client_id=${id}`)
+      const projectsRes = await fetch('/api/projects', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          action: 'fetch',
+          client_id: id
+        })
+      })
       const projectsData = await projectsRes.json()
-      setProjects(projectsData)
+      setProjects(projectsData || [])
 
       // Fetch client's contracts
-      const contractsRes = await fetch(`/api/contracts?client_id=${id}`)
+      const contractsRes = await fetch('/api/contracts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          action: 'fetch',
+          client_id: id
+        })
+      })
       const contractsData = await contractsRes.json()
-      setContracts(contractsData)
+      setContracts(contractsData || [])
     } catch (error) {
       console.error('Failed to fetch client data:', error)
     } finally {

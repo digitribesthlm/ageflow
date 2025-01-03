@@ -5,7 +5,20 @@ export default async function handler(req, res) {
     // Check auth token from cookie
     const authToken = req.cookies['auth-token']
     if (!authToken) {
-      return res.status(401).json({ message: 'Unauthorized' })
+      console.error('No auth token found in cookies')
+      return res.status(401).json({ message: 'Unauthorized - No token' })
+    }
+
+    try {
+      // Verify token format
+      const userData = JSON.parse(Buffer.from(authToken, 'base64').toString())
+      if (!userData.userId) {
+        console.error('Invalid token format:', userData)
+        return res.status(401).json({ message: 'Unauthorized - Invalid token' })
+      }
+    } catch (tokenError) {
+      console.error('Token parsing error:', tokenError)
+      return res.status(401).json({ message: 'Unauthorized - Invalid token format' })
     }
 
     const { db } = await connectToDatabase()
@@ -41,6 +54,39 @@ export default async function handler(req, res) {
         return res.status(200).json(packagesWithServices)
 
       case 'POST':
+        const { action } = req.body
+
+        if (action === 'fetch') {
+          // Get packages with service details
+          const packages = await db.collection('agency_service_packages')
+            .find({ active: { $ne: false } })
+            .sort({ name: 1 })
+            .toArray()
+
+          // Get all available services to populate service details
+          const availableServices = await db.collection('agency_services')
+            .find({ active: { $ne: false } })
+            .toArray()
+
+          // Populate service details in each package
+          const packagesWithServices = packages.map(pkg => ({
+            ...pkg,
+            includedServices: Array.isArray(pkg.includedServices) ? pkg.includedServices.map(serviceRef => {
+              const serviceDetails = availableServices.find(s => s.service_id === serviceRef.service_id)
+              return {
+                ...serviceRef,
+                name: serviceDetails?.name || 'Unknown Service',
+                category: serviceDetails?.category,
+                description: serviceDetails?.description,
+                deliverables: serviceDetails?.deliverables
+              }
+            }) : []
+          }))
+
+          return res.status(200).json(packagesWithServices)
+        }
+
+        // Handle package creation
         const {
           name,
           description,

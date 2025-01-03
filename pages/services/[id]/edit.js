@@ -16,6 +16,11 @@ export default function EditService() {
     service_type: '',
     billing_type: '',
     description: '',
+    base_price: '',
+    minimum_hours: '',
+    included_hours: '',
+    process_template_id: '',
+    selected_steps: [],
     deliverables: []
   })
 
@@ -32,14 +37,45 @@ export default function EditService() {
 
   const fetchServiceData = async () => {
     try {
-      const response = await fetch(`/api/services/${id}`)
-      if (response.ok) {
-        const data = await response.json()
-        setFormData(data)
-      } else {
-        throw new Error('Failed to fetch service')
+      const response = await fetch(`/api/services/${id}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Failed to fetch service')
       }
+
+      const data = await response.json()
+      console.log('Fetched service data:', data)
+
+      // Transform deliverables data to match the form structure
+      const transformedData = {
+        name: data.name || '',
+        category: data.category || '',
+        service_type: data.service_type || '',
+        billing_type: data.billing_type || '',
+        description: data.description || '',
+        base_price: data.base_price || 0,
+        minimum_hours: data.minimum_hours || 0,
+        included_hours: data.included_hours || 0,
+        process_template_id: data.process_template_id || '',
+        selected_steps: data.selected_steps || [],
+        deliverables: data.deliverables?.map(phase => ({
+          name: phase.phase,
+          description: phase.description || '',
+          estimatedHours: phase.tasks?.[0]?.estimated_hours || 0,
+          tasks: phase.tasks || []
+        })) || []
+      }
+
+      console.log('Transformed data:', transformedData)
+      setFormData(transformedData)
     } catch (error) {
+      console.error('Error fetching service:', error)
       setError(error.message)
     } finally {
       setLoading(false)
@@ -52,21 +88,47 @@ export default function EditService() {
     setError(null)
 
     try {
+      // Transform form data back to API format
+      const apiData = {
+        name: formData.name,
+        description: formData.description,
+        category: formData.category,
+        service_type: formData.service_type,
+        billing_type: formData.billing_type,
+        base_price: parseFloat(formData.base_price) || 0,
+        minimum_hours: parseInt(formData.minimum_hours) || 0,
+        included_hours: parseInt(formData.included_hours) || 0,
+        process_template_id: formData.process_template_id,
+        selected_steps: formData.selected_steps || [],
+        deliverables: formData.deliverables.map(deliverable => ({
+          phase: deliverable.name,
+          description: deliverable.description,
+          tasks: deliverable.tasks || [{
+            name: deliverable.name,
+            description: deliverable.description,
+            estimated_hours: parseInt(deliverable.estimatedHours) || 0
+          }]
+        }))
+      }
+
+      console.log('Sending update data:', apiData)
+
       const response = await fetch(`/api/services/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(apiData),
       })
 
-      if (response.ok) {
-        router.push('/services')
-      } else {
+      if (!response.ok) {
         const error = await response.json()
         throw new Error(error.message || 'Failed to update service')
       }
+
+      router.push('/services')
     } catch (error) {
+      console.error('Error updating service:', error)
       setError(error.message)
       setSaving(false)
     }
@@ -80,7 +142,8 @@ export default function EditService() {
         {
           name: '',
           description: '',
-          estimatedHours: ''
+          estimatedHours: 0,
+          tasks: []
         }
       ]
     })
@@ -90,7 +153,8 @@ export default function EditService() {
     const newDeliverables = [...formData.deliverables]
     newDeliverables[index] = {
       ...newDeliverables[index],
-      [field]: value
+      [field]: value,
+      tasks: newDeliverables[index].tasks || []
     }
     setFormData({
       ...formData,
@@ -235,48 +299,120 @@ export default function EditService() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="form-control w-full">
-                    <label className="label">
-                      <span className="label-text font-medium">Deliverable Name</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Enter deliverable name"
-                      className="input input-bordered w-full"
-                      value={deliverable.name}
-                      onChange={(e) => updateDeliverable(index, 'name', e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="form-control w-full">
-                    <label className="label">
-                      <span className="label-text font-medium">Estimated Hours</span>
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="Enter estimated hours"
-                      className="input input-bordered w-full"
-                      value={deliverable.estimatedHours}
-                      onChange={(e) => updateDeliverable(index, 'estimatedHours', e.target.value)}
-                      required
-                    />
-                  </div>
+                <div className="form-control w-full mb-4">
+                  <label className="label">
+                    <span className="label-text font-medium">Phase Name</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter phase name"
+                    className="input input-bordered w-full"
+                    value={deliverable.name}
+                    onChange={(e) => updateDeliverable(index, 'name', e.target.value)}
+                    required
+                  />
                 </div>
 
-                <div className="form-control w-full mt-4">
+                <div className="form-control w-full mb-4">
                   <label className="label">
-                    <span className="label-text font-medium">Description</span>
+                    <span className="label-text font-medium">Phase Description</span>
                   </label>
                   <textarea
                     className="textarea textarea-bordered"
-                    placeholder="Enter deliverable description"
+                    placeholder="Enter phase description"
                     value={deliverable.description}
                     onChange={(e) => updateDeliverable(index, 'description', e.target.value)}
                     required
                   ></textarea>
                 </div>
+
+                <div className="divider text-md">Tasks</div>
+
+                {deliverable.tasks.map((task, taskIndex) => (
+                  <div key={taskIndex} className="card bg-base-300 shadow-sm p-4 mb-4">
+                    <div className="form-control w-full mb-4">
+                      <label className="label">
+                        <span className="label-text font-medium">Task Name</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Enter task name"
+                        className="input input-bordered w-full"
+                        value={task.name}
+                        onChange={(e) => {
+                          const newTasks = [...deliverable.tasks]
+                          newTasks[taskIndex] = { ...task, name: e.target.value }
+                          updateDeliverable(index, 'tasks', newTasks)
+                        }}
+                        required
+                      />
+                    </div>
+
+                    <div className="form-control w-full mb-4">
+                      <label className="label">
+                        <span className="label-text font-medium">Task Description</span>
+                      </label>
+                      <textarea
+                        className="textarea textarea-bordered"
+                        placeholder="Enter task description"
+                        value={task.description}
+                        onChange={(e) => {
+                          const newTasks = [...deliverable.tasks]
+                          newTasks[taskIndex] = { ...task, description: e.target.value }
+                          updateDeliverable(index, 'tasks', newTasks)
+                        }}
+                        required
+                      ></textarea>
+                    </div>
+
+                    <div className="form-control w-full">
+                      <label className="label">
+                        <span className="label-text font-medium">Estimated Hours</span>
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="Enter estimated hours"
+                        className="input input-bordered w-full"
+                        value={task.estimated_hours}
+                        onChange={(e) => {
+                          const newTasks = [...deliverable.tasks]
+                          newTasks[taskIndex] = { ...task, estimated_hours: parseInt(e.target.value) || 0 }
+                          updateDeliverable(index, 'tasks', newTasks)
+                        }}
+                        required
+                      />
+                    </div>
+
+                    <div className="flex justify-end mt-4">
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm text-error"
+                        onClick={() => {
+                          const newTasks = [...deliverable.tasks]
+                          newTasks.splice(taskIndex, 1)
+                          updateDeliverable(index, 'tasks', newTasks)
+                        }}
+                      >
+                        Remove Task
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm mt-2"
+                  onClick={() => {
+                    const newTasks = [...deliverable.tasks, {
+                      name: '',
+                      description: '',
+                      estimated_hours: 0
+                    }]
+                    updateDeliverable(index, 'tasks', newTasks)
+                  }}
+                >
+                  Add Task
+                </button>
               </div>
             ))}
 

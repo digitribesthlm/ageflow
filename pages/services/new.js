@@ -30,10 +30,21 @@ export default function NewService() {
 
     const fetchProcessTemplates = async () => {
         try {
-            const response = await fetch('/api/process-templates')
-            if (!response.ok) throw new Error('Failed to fetch process templates')
+            const response = await fetch('/api/process-templates', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ action: 'fetch' })
+            })
+            
+            if (!response.ok) {
+                const error = await response.json()
+                throw new Error(error.message || 'Failed to fetch process templates')
+            }
+            
             const data = await response.json()
-            console.log('Fetched process templates:', data) // Debug log
+            console.log('Fetched process templates:', data)
             setProcessTemplates(data)
         } catch (error) {
             console.error('Error fetching process templates:', error)
