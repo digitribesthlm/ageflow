@@ -35,18 +35,19 @@ export default async function handler(req, res) {
                 }
 
                 if (action === 'create') {
-                    const { name, email, phone, address } = req.body
+                    const { name, company, industry, domain, contactInfo } = req.body
                     
-                    if (!name) {
-                        return res.status(400).json({ message: 'Client name is required' })
+                    if (!name || !company) {
+                        return res.status(400).json({ message: 'Name and company are required' })
                     }
 
                     const client = {
                         client_id: `CLT${Date.now()}`,
                         name,
-                        email,
-                        phone,
-                        address,
+                        company,
+                        industry,
+                        domain,
+                        contactInfo,
                         active: true,
                         created_at: new Date(),
                         updated_at: new Date()
