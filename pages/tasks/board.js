@@ -14,6 +14,7 @@ export default function TaskBoard() {
   const [projects, setProjects] = useState([])
   const [draggedTask, setDraggedTask] = useState(null)
   const [selectedTask, setSelectedTask] = useState(null)
+  const [selectedEmployee, setSelectedEmployee] = useState('')
 
   useEffect(() => {
     const user = localStorage.getItem('user')
@@ -26,17 +27,36 @@ export default function TaskBoard() {
     fetchProjects()
   }, [])
 
+  useEffect(() => {
+    fetchTasks()
+  }, [selectedEmployee])
+
   const fetchTasks = async () => {
     try {
-      const response = await fetch('/api/tasks')
+      const response = await fetch('/api/tasks', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      })
+      
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Server returned non-JSON response')
+      }
+
       if (response.ok) {
         const data = await response.json()
-        setTasks(data || [])
+        const filteredTasks = data.filter(task => !selectedEmployee || task.assigned_to === selectedEmployee)
+        setTasks(filteredTasks || [])
       } else {
-        throw new Error('Failed to fetch tasks')
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to fetch tasks')
       }
     } catch (error) {
       setError(error.message)
+      console.error('Failed to fetch tasks:', error)
     } finally {
       setLoading(false)
     }
@@ -44,7 +64,13 @@ export default function TaskBoard() {
 
   const fetchEmployees = async () => {
     try {
-      const response = await fetch('/api/employees')
+      const response = await fetch('/api/employees', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action: 'fetch' })
+      })
       if (response.ok) {
         const data = await response.json()
         setEmployees(data || [])
@@ -67,7 +93,9 @@ export default function TaskBoard() {
   }
 
   const getTasksByStatus = (status) => {
-    return tasks.filter(task => task.status === status)
+    return tasks
+      .filter(task => task.status === status)
+      .filter(task => !selectedEmployee || task.assigned_to === selectedEmployee)
   }
 
   const handleDragStart = (e, taskId) => {
@@ -204,12 +232,26 @@ export default function TaskBoard() {
       <PageHeader 
         title="Task Board"
         actions={
-          <button
-            onClick={() => router.push('/tasks/new')}
-            className="btn btn-primary"
-          >
-            New Task
-          </button>
+          <div className="flex gap-2 items-center">
+            <select
+              className="select select-bordered"
+              value={selectedEmployee}
+              onChange={(e) => setSelectedEmployee(e.target.value)}
+            >
+              <option value="">All Employees</option>
+              {employees.map((employee) => (
+                <option key={employee.employee_id} value={employee.employee_id}>
+                  {employee.name}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => router.push('/tasks/new')}
+              className="btn btn-primary"
+            >
+              New Task
+            </button>
+          </div>
         }
       />
       <ContentContainer>
