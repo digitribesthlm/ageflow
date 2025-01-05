@@ -62,7 +62,7 @@ export default function WelcomePage() {
               <h1 className="text-6xl font-bold leading-tight">
                 <span className="block text-gray-900">GROW</span>
                 <span className="block text-blue-600">YOUR</span>
-                <span className="block text-emerald-500">TOPICS</span>
+                <span className="block text-emerald-500">TOPICS4</span>
               </h1>
               <p className="text-gray-600 text-lg max-w-md">
                 Create, manage, and organize your topics efficiently with our powerful platform.
