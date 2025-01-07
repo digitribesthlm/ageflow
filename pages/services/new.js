@@ -100,20 +100,20 @@ export default function NewService() {
         if (selectedTemplate) {
             selectedTemplate.steps.forEach(step => {
                 const selectedTasksInPhase = step.tasks.filter(task => 
-                    selected_steps.includes(task.task_template_id) ||
-                    (task.sub_tasks || []).some(subTask => selected_steps.includes(subTask.sub_task_template_id))
+                    selectedSteps.includes(task.task_template_id) ||
+                    (task.sub_tasks || []).some(subTask => selectedSteps.includes(subTask.sub_task_template_id))
                 )
 
                 if (selectedTasksInPhase.length > 0) {
                     selectedTasksInPhase.forEach(task => {
-                        if (selected_steps.includes(task.task_template_id)) {
+                        if (selectedSteps.includes(task.task_template_id)) {
                             selectedDeliverables.push(`${task.name} (${task.estimated_hours}h)`)
                             totalEstimatedHours += task.estimated_hours || 0
                         }
 
                         // Add selected sub-tasks
                         const selectedSubTasks = (task.sub_tasks || []).filter(subTask => 
-                            selected_steps.includes(subTask.sub_task_template_id)
+                            selectedSteps.includes(subTask.sub_task_template_id)
                         )
 
                         selectedSubTasks.forEach(subTask => {
@@ -143,7 +143,7 @@ export default function NewService() {
                 body: JSON.stringify({
                     action: 'create',
                     ...formData,
-                    selected_steps: selected_steps,
+                    selected_steps: selectedSteps,
                     deliverables: selectedDeliverables.join('\n'),
                     total_estimated_hours: totalEstimatedHours
                 }),

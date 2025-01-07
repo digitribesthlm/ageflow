@@ -36,7 +36,13 @@ export default function NewServicePackage() {
     const fetchServices = async () => {
         try {
             console.log('Fetching services...')
-            const response = await fetch('/api/services')
+            const response = await fetch('/api/services', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ action: 'fetch' })
+            })
             console.log('Services response status:', response.status)
             
             if (!response.ok) {
