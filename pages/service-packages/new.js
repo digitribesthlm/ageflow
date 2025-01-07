@@ -70,7 +70,10 @@ export default function NewServicePackage() {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(formData),
+                body: JSON.stringify({
+                    action: 'create',
+                    ...formData,
+                }),
             })
 
             if (response.ok) {
