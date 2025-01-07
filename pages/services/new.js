@@ -93,6 +93,47 @@ export default function NewService() {
         setLoading(true)
         setError(null)
 
+        // Calculate total estimated hours and format deliverables
+        let totalEstimatedHours = 0
+        const selectedDeliverables = []
+
+        if (selectedTemplate) {
+            selectedTemplate.steps.forEach(step => {
+                const selectedTasksInPhase = step.tasks.filter(task => 
+                    selected_steps.includes(task.task_template_id) ||
+                    (task.sub_tasks || []).some(subTask => selected_steps.includes(subTask.sub_task_template_id))
+                )
+
+                if (selectedTasksInPhase.length > 0) {
+                    selectedTasksInPhase.forEach(task => {
+                        if (selected_steps.includes(task.task_template_id)) {
+                            selectedDeliverables.push(`${task.name} (${task.estimated_hours}h)`)
+                            totalEstimatedHours += task.estimated_hours || 0
+                        }
+
+                        // Add selected sub-tasks
+                        const selectedSubTasks = (task.sub_tasks || []).filter(subTask => 
+                            selected_steps.includes(subTask.sub_task_template_id)
+                        )
+
+                        selectedSubTasks.forEach(subTask => {
+                            selectedDeliverables.push(`${subTask.name} (${subTask.estimated_hours}h)`)
+                            totalEstimatedHours += subTask.estimated_hours || 0
+                        })
+                    })
+                }
+            })
+        }
+
+        // Add any additional deliverables
+        if (formData.additional_deliverables) {
+            const additionalDeliverables = formData.additional_deliverables
+                .split('\n')
+                .filter(d => d.trim())
+                .map(d => d.trim())
+            selectedDeliverables.push(...additionalDeliverables)
+        }
+
         try {
             const response = await fetch('/api/services', {
                 method: 'POST',
@@ -100,9 +141,11 @@ export default function NewService() {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
+                    action: 'create',
                     ...formData,
-                    selected_steps: selectedSteps,
-                    deliverables: formData.additional_deliverables || ''
+                    selected_steps: selected_steps,
+                    deliverables: selectedDeliverables.join('\n'),
+                    total_estimated_hours: totalEstimatedHours
                 }),
             })
 

@@ -10,6 +10,7 @@ export default function EditService() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     category: '',
@@ -171,6 +172,27 @@ export default function EditService() {
     })
   }
 
+  const handleDelete = async () => {
+    try {
+      const response = await fetch(`/api/services/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Failed to delete service')
+      }
+
+      router.push('/services')
+    } catch (error) {
+      console.error('Error deleting service:', error)
+      setError(error.message)
+    }
+  }
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -183,14 +205,18 @@ export default function EditService() {
 
   return (
     <DashboardLayout>
-      <PageHeader 
+      <PageHeader
         title="Edit Service"
+        breadcrumbs={[
+          { label: 'Services', href: '/services' },
+          { label: 'Edit Service', href: `/services/${id}/edit` }
+        ]}
         actions={
           <button
-            onClick={() => router.back()}
-            className="btn btn-ghost"
+            onClick={() => setShowDeleteModal(true)}
+            className="btn btn-error"
           >
-            Cancel
+            Delete Service
           </button>
         }
       />
@@ -439,6 +465,29 @@ export default function EditService() {
             </div>
           </form>
         </div>
+
+        {showDeleteModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full">
+              <h3 className="text-lg font-bold mb-4">Delete Service</h3>
+              <p className="mb-4">Are you sure you want to delete this service? This action cannot be undone.</p>
+              <div className="flex justify-end gap-4">
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => setShowDeleteModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-error"
+                  onClick={handleDelete}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </ContentContainer>
     </DashboardLayout>
   )

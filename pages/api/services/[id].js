@@ -85,24 +85,19 @@ export default async function handler(req, res) {
 
       case 'DELETE':
         console.log('Executing DELETE request for service:', id)
-        // Soft delete by setting active to false
-        const deleteResult = await db.collection('agency_services').updateOne(
-          { service_id: id },
-          { 
-            $set: {
-              active: false,
-              updated_at: new Date()
-            }
-          }
-        )
-
-        console.log('Delete result:', deleteResult)
+        
+        const deleteResult = await db.collection('agency_services')
+          .updateOne(
+            { service_id: id },
+            { $set: { active: false, deleted_at: new Date() } }
+          )
 
         if (deleteResult.matchedCount === 0) {
           console.log('No service found to delete with ID:', id)
           return res.status(404).json({ message: 'Service not found' })
         }
 
+        console.log('Service soft deleted:', id)
         return res.status(200).json({ message: 'Service deleted successfully' })
 
       default:
