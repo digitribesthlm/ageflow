@@ -94,26 +94,39 @@ export default function Services() {
 
               <div className="mt-4">
                 <h3 className="font-medium mb-2">Deliverables:</h3>
-                <ul className="list-disc list-inside space-y-1">
-                  {service.deliverables.map((deliverable, index) => (
-                    <li key={index} className="text-sm">
-                      {deliverable.name} ({deliverable.estimatedHours}h)
-                    </li>
+                <div className="space-y-4">
+                  {service.deliverables?.map((phase, phaseIndex) => (
+                    <div key={phaseIndex}>
+                      {phase.phase !== 'Additional Deliverables' && phase.tasks && (
+                        <>
+                          <h4 className="font-medium text-sm">{phase.phase}</h4>
+                          <ul className="list-disc list-inside space-y-1">
+                            {phase.tasks.map((task, taskIndex) => (
+                              <li key={taskIndex} className="text-sm">
+                                {task.name} {task.estimated_hours && `(${task.estimated_hours}h)`}
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
 
-              <div className="divider my-2"></div>
-
-              <div className="flex justify-between items-center">
+              <div className="mt-4 flex justify-between items-center">
+                <div className="badge">{service.billing_type}</div>
                 <div className="text-sm">
-                  Billing: <span className="font-medium">{service.billing_type}</span>
+                  {service.estimated_hours && `Total: ${service.estimated_hours}h`}
                 </div>
-                <button 
+              </div>
+
+              <div className="card-actions justify-end mt-4">
+                <button
+                  className="btn btn-ghost btn-sm"
                   onClick={() => router.push(`/services/${service.service_id}/edit`)}
-                  className="btn btn-primary btn-sm"
                 >
-                  Edit Service
+                  Edit
                 </button>
               </div>
             </div>
