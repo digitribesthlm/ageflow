@@ -10,9 +10,12 @@ export default function WelcomePage() {
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
+    const user = localStorage.getItem('user');
+    setIsLoggedIn(!!user);
     if (showLoginModal) {
       const savedEmail = localStorage.getItem('rememberedEmail');
       if (savedEmail) {
@@ -79,7 +82,7 @@ export default function WelcomePage() {
           </div>
         </div>
 
-        <ServicesGrid />
+        {isLoggedIn && <ServicesGrid />}
       </main>
 
       <Footer />
